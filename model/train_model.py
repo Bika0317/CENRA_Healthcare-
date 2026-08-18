@@ -7,8 +7,8 @@ import numpy as np
 import pandas as pd
 from datetime import date, timedelta
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split, StratifiedKFold, cross_val_score
-from sklearn.metrics import roc_auc_score, classification_report
+from sklearn.model_selection import train_test_split, StratifiedKFold, cross_val_score, cross_val_predict
+from sklearn.metrics import roc_auc_score, roc_curve, classification_report
 
 from features import build_features, make_labels
 from risk_model import train_risk_model
@@ -56,6 +56,15 @@ def main():
     cv_scores = cross_val_score(cv_clf, X, y, cv=cv, scoring="roc_auc")
     print(f"5-fold CV AUC: {cv_scores.mean():.3f} ± {cv_scores.std():.3f}  (每折: {np.round(cv_scores, 3).tolist()})")
     pd.Series(cv_scores, name="cv_auc").to_csv("model/cv_scores.csv", index=False)
+
+    # Out-of-fold 預測：每筆樣本的預測都來自「沒看過它的那一折」訓練出的模型，
+    # 拿這組預測畫 ROC 曲線，是比單一 AUC 數字更可驗證的證據
+    # （AUC 定義：ROC 曲線下面積 = P(隨機一個正樣本的預測分數 > 隨機一個負樣本的預測分數)）。
+    oof_proba = cross_val_predict(cv_clf, X, y, cv=cv, method="predict_proba")[:, 1]
+    oof_auc = roc_auc_score(y, oof_proba)
+    fpr, tpr, thresholds = roc_curve(y, oof_proba)
+    pd.DataFrame({"fpr": fpr, "tpr": tpr, "threshold": thresholds}).to_csv("model/roc_curve.csv", index=False)
+    print(f"Out-of-fold AUC (整體，非逐折平均): {oof_auc:.3f} — 與 5-fold 平均 {cv_scores.mean():.3f} 應相近，驗證 CV 結果一致")
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42, stratify=y)
 

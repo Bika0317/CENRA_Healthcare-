@@ -23,6 +23,7 @@ from report import (
 from explain import top_explainable_features, explain_customer
 from next_best_action import build_product_affinity, recommend_for_customer, recommendation_text
 from ab_test import bootstrap_uplift
+from sklearn.metrics import auc as sk_auc
 
 RISK_COLOR_MAP = {"紅：高風險(疑似競品入侵)": "#d62728", "黃：需留意": "#e6b800", "綠：穩定": "#2ca02c"}
 RISK_EMOJI_MAP = {"紅": "🔴", "黃": "🟡", "綠": "🟢"}
@@ -263,6 +264,26 @@ with tab_model:
                           annotation_text=f"平均 {cv_scores.mean():.3f}")
         st.plotly_chart(cv_fig, use_container_width=True)
         st.caption("用 5-fold 交叉驗證取代單次 train/test 切分，確認模型表現不是抽到特定切分運氣好，各折 AUC 落在相近區間代表穩定。")
+
+    with st.expander("AUC 與交叉驗證是怎麼算出來的（公式 + 可驗證證據）"):
+        st.markdown("**AUC（ROC 曲線下面積）定義：**")
+        st.latex(r"\text{AUC} = P\big(\hat{p}(x^{+}) > \hat{p}(x^{-})\big)")
+        st.caption("白話說：隨機各抽一位「有下單」與「沒下單」的客戶，模型給前者的預測分數比後者高的機率。0.5 = 純猜測，1.0 = 完美排序。")
+        st.markdown("**5-fold Stratified 交叉驗證流程：**")
+        st.latex(r"\overline{\text{AUC}} = \frac{1}{5}\sum_{k=1}^{5} \text{AUC}_k \,,\quad \text{std} = \sqrt{\frac{1}{5}\sum_{k=1}^{5}(\text{AUC}_k-\overline{\text{AUC}})^2}")
+        st.caption("資料依標籤比例切成 5 折；每折輪流當測試集，其餘 4 折訓練，共訓練 5 個模型；平均值與標準差就是上方長條圖的依據。")
+
+        roc_path = os.path.join(os.path.dirname(__file__), "..", "model", "roc_curve.csv")
+        if os.path.exists(roc_path):
+            roc_df = pd.read_csv(roc_path)
+            oof_auc = sk_auc(roc_df["fpr"], roc_df["tpr"])
+            st.markdown(f"**Out-of-fold ROC 曲線**（整體 AUC = {oof_auc:.3f}，每筆樣本的預測都來自沒看過它的那一折模型，可與上方 5-fold 平均互相驗證）")
+            roc_fig = go.Figure()
+            roc_fig.add_trace(go.Scatter(x=roc_df["fpr"], y=roc_df["tpr"], mode="lines", name="模型 ROC", line=dict(color="#c8006e", width=3)))
+            roc_fig.add_trace(go.Scatter(x=[0, 1], y=[0, 1], mode="lines", name="隨機猜測基準線", line=dict(color="#aaa", dash="dash")))
+            roc_fig.update_layout(xaxis_title="False Positive Rate", yaxis_title="True Positive Rate", height=420)
+            st.plotly_chart(roc_fig, use_container_width=True)
+            st.caption("這條曲線是用 sklearn `cross_val_predict` 產生的 out-of-fold 預測機率直接畫出來的，不是憑空編的數字；原始 fpr/tpr 資料存於 model/roc_curve.csv，任何人都能重算驗證。")
 
     st.divider()
     st.subheader("成交預判模型：特徵重要性")
