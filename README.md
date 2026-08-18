@@ -2,6 +2,8 @@
 
 2026 中化智匯盃 AI 創新應用挑戰賽｜中化裕民 CENRA+ Healthcare 賽題原型。
 
+**線上展示**：https://esxawprwq7kwnvghmr8mbe.streamlit.app/
+
 ## 執行方式
 
 ```bash
@@ -38,7 +40,11 @@ python notify/send_daily_email.py
 - `app/` Streamlit 展示介面：管理總覽（含客戶地理分佈地圖、效益信賴區間）、業務員每日建議（含拜訪路線地圖、Next Best Action）、
   客戶診斷（含系統判斷原因、Next Best Action）、模型洞察（含異常分數分佈）、每日通知信 / 匯出（含 LINE 訊息 mock）
 - `notify/` 每日通知信排程腳本（預設 Dry Run，可切換為真實 SMTP 寄送）
-- `docs/` 簡報大綱與賽題原始 PDF
+- `docs/`
+  - `cenra_topic_0803.pdf` 賽題原始 PDF
+  - `generate_slide_assets.py` 用系統實際資料產生圖表（KPI 散佈圖、效益模擬、交叉驗證等）
+  - `assets/` 上述腳本產出的圖表 PNG
+  - `screenshots/` Dashboard 各頁籤的實際畫面截圖（`crop/` 為裁切後版本）
 
 ## 現況與待辦
 - 目前使用合成資料驗證整條 pipeline，成交預判模型以 5-fold 交叉驗證得 AUC 0.618 ± 0.023（單次 holdout 為 0.608，兩者一致，模型表現穩定非抽樣運氣）；換上真實 CRM/ERP 資料後需重新訓練。
