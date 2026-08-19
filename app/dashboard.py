@@ -24,6 +24,7 @@ from explain import top_explainable_features, explain_customer
 from next_best_action import build_product_affinity, recommend_for_customer, recommendation_text
 from ab_test import bootstrap_uplift
 from sklearn.metrics import auc as sk_auc
+from review_log import load_review_log, append_review, build_log_rows
 
 RISK_COLOR_MAP = {"紅：高風險(疑似競品入侵)": "#d62728", "黃：需留意": "#e6b800", "綠：穩定": "#2ca02c"}
 RISK_EMOJI_MAP = {"紅": "🔴", "黃": "🟡", "綠": "🟢"}
@@ -205,6 +206,54 @@ with tab_rep:
         export_table(my_customers).to_csv(index=False).encode("utf-8-sig"),
         file_name=f"{rep_name}_拜訪清單.csv", mime="text/csv",
     )
+
+    st.divider()
+    st.subheader("Human-in-the-Loop：業務員審核建議清單")
+    st.caption(
+        "AI 只負責產生建議，最終決定權在業務員——把每一筆建議標記「採納／修改／拒絕」並送出，"
+        "系統會記錄下來，成為未來調整排序權重、重新訓練模型的回饋資料，而不是單向的黑盒輸出。"
+    )
+
+    hitl_n = min(10, len(my_customers))
+    review_base = my_customers.head(hitl_n)[["customer_id", "customer_name", "purchase_proba", "risk_flag"]].reset_index(drop=True)
+    review_base["AI成交機率"] = (review_base["purchase_proba"] * 100).round(1).astype(str) + "%"
+    review_base["審核動作"] = "未審核"
+    review_base["備註"] = ""
+
+    edited = st.data_editor(
+        review_base,
+        column_order=["customer_name", "AI成交機率", "risk_flag", "審核動作", "備註"],
+        column_config={
+            "customer_name": st.column_config.TextColumn("客戶名稱", disabled=True),
+            "AI成交機率": st.column_config.TextColumn("AI成交機率", disabled=True),
+            "risk_flag": st.column_config.TextColumn("AI風險燈號", disabled=True),
+            "審核動作": st.column_config.SelectboxColumn("審核動作", options=["未審核", "採納", "修改", "拒絕"]),
+            "備註": st.column_config.TextColumn("備註（選填）"),
+        },
+        hide_index=True, use_container_width=True, key=f"hitl_editor_{rep_id}",
+    )
+
+    if st.button("送出審核紀錄", key=f"hitl_submit_{rep_id}"):
+        to_log = edited[edited["審核動作"] != "未審核"]
+        if to_log.empty:
+            st.warning("目前沒有標記任何審核動作，未送出。")
+        else:
+            rows = build_log_rows(to_log, rep_id, rep_name)
+            append_review(rows)
+            st.success(f"已記錄 {len(rows)} 筆審核決策，累積共 {len(load_review_log())} 筆歷史紀錄。")
+
+    with st.expander("📋 審核歷程（Human-in-the-Loop 回饋紀錄）"):
+        log_df = load_review_log()
+        if log_df.empty:
+            st.caption("目前尚無審核紀錄。")
+        else:
+            action_counts = log_df["action"].value_counts()
+            c1, c2, c3 = st.columns(3)
+            c1.metric("採納", int(action_counts.get("採納", 0)))
+            c2.metric("修改", int(action_counts.get("修改", 0)))
+            c3.metric("拒絕", int(action_counts.get("拒絕", 0)))
+            st.dataframe(log_df.sort_values("timestamp", ascending=False).head(20), use_container_width=True)
+            st.caption("拒絕率偏高的客戶或情境，代表 AI 建議可能需要調整排序權重或重新訓練——這份紀錄就是回饋迴圈的起點。")
 
 # ---------------- 客戶診斷 ----------------
 with tab_customer:
