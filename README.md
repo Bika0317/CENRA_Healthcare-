@@ -36,6 +36,7 @@ python notify/send_daily_email.py
   - `next_best_action.py` Next Best Action：依同儕（同通路×等級）品項滲透缺口推薦主推品項
   - `ab_test.py` 效益估計的 Bootstrap 信賴區間（非真實 A/B 測試，正式上線建議改用同期隨機分派驗證）
   - `ranking.py` 拜訪優先順序排序引擎
+  - `review_log.py` Human-in-the-Loop 審核日誌：業務員標記 AI 建議「採納／修改／拒絕」並記錄，作為未來調整排序權重/重新訓練的回饋資料
   - `report.py` 日報/信件內容產生（email + LINE 訊息格式）、CSV/Excel 匯出格式
 - `app/` Streamlit 展示介面：管理總覽（含客戶地理分佈地圖、效益信賴區間）、業務員每日建議（含拜訪路線地圖、Next Best Action）、
   客戶診斷（含系統判斷原因、Next Best Action）、模型洞察（含異常分數分佈）、每日通知信 / 匯出（含 LINE 訊息 mock）
