@@ -16,7 +16,7 @@ def make_task(**overrides) -> Task:
     defaults = dict(
         task_id="T-TEST-1", generation_key="GEN-TEST-1",
         generated_at=datetime(2026, 8, 25, 8, 0), task_date=DEMO_DATE,
-        rep_id="R100", target_type=TargetType.ACCOUNT, target_id="A001", target_name="測試診所",
+        rep_id="L100", target_type=TargetType.ACCOUNT, target_id="A001", target_name="測試診所",
         task_type=TaskType.DEFEND, title="測試任務", why_now="測試原因", objective="確認狀況",
         action_mode=ActionMode.VISIT, estimated_minutes=45,
         signal_score=70.0, business_value_score=60.0, urgency_score=50.0, evidence_score=70.0,

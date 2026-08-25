@@ -4,8 +4,8 @@ CENRA Mission 合成資料產生器。
 原則（SPEC §9.3）：先生成事件（訂單/互動），再讓 engines/ 依規則判斷要不要產生任務；
 不預先決定「這家診所是高風險」再回填特徵——那是舊版 competitor_pressure 洩漏標籤的錯誤。
 
-主要 Demo 業務 R100 的資料是手工精心設計的，確保剛好對出 SPEC AC-01：
-今日候選任務 = 8 個，攻 2、守 3、增 3。R101/R102 用簡單規則產生，補足團隊規模但不強求精確數字。
+主要 Demo 業務 L100 的資料是手工精心設計的，確保剛好對出 SPEC AC-01：
+今日候選任務 = 8 個，攻 2、守 3、增 3。L101/L102 用簡單規則產生，補足團隊規模但不強求精確數字。
 
 固定 random seed，重跑會得到一模一樣的資料。
 """
@@ -55,17 +55,17 @@ def _rep_home(region: str):
 
 
 REPS = [
-    {"rep_id": "R100", "rep_name": "陳雅婷", "region": "台北", "email": "r100@cenra-demo.internal",
+    {"rep_id": "L100", "rep_name": "陳雅婷", "region": "台北", "email": "r100@cenra-demo.internal",
      "daily_available_minutes": 240, "home_lat": _rep_home("台北")[0], "home_lon": _rep_home("台北")[1]},
-    {"rep_id": "R101", "rep_name": "林柏宇", "region": "新北", "email": "r101@cenra-demo.internal",
+    {"rep_id": "L101", "rep_name": "林柏宇", "region": "新北", "email": "r101@cenra-demo.internal",
      "daily_available_minutes": 240, "home_lat": _rep_home("新北")[0], "home_lon": _rep_home("新北")[1]},
-    {"rep_id": "R102", "rep_name": "黃思穎", "region": "桃園", "email": "r102@cenra-demo.internal",
+    {"rep_id": "L102", "rep_name": "黃思穎", "region": "桃園", "email": "r102@cenra-demo.internal",
      "daily_available_minutes": 240, "home_lat": _rep_home("桃園")[0], "home_lon": _rep_home("桃園")[1]},
 ]
 
 
 def build_r100_accounts():
-    """主要 Demo 業務 R100 的 10 家既有帳戶，逐一對應 SPEC §9.2 情境。"""
+    """主要 Demo 業務 L100 的 10 家既有帳戶，逐一對應 SPEC §9.2 情境。"""
     accounts = []
     interactions = []
     orders = []
@@ -74,7 +74,7 @@ def build_r100_accounts():
         lat, lon = jitter_latlon("台北")
         accounts.append({
             "account_id": account_id, "name": name, "specialty": specialty, "region": "台北",
-            "status": status, "rep_id": "R100", "lat": lat, "lon": lon, "value_band": value_band,
+            "status": status, "rep_id": "L100", "lat": lat, "lon": lon, "value_band": value_band,
             "created_at": iso(HISTORY_START - timedelta(days=400)),
             "updated_at": iso(DEMO_DATE - timedelta(days=1)),
         })
@@ -82,7 +82,7 @@ def build_r100_accounts():
 
     def add_order(order_id, account_id, days_ago, product_line, amount, qty=10, status="completed"):
         orders.append({
-            "order_id": order_id, "account_id": account_id, "rep_id": "R100",
+            "order_id": order_id, "account_id": account_id, "rep_id": "L100",
             "order_date": iso(DEMO_DATE - timedelta(days=days_ago)),
             "product_line": product_line, "quantity": qty, "amount": amount, "status": status,
         })
@@ -90,7 +90,7 @@ def build_r100_accounts():
     def add_interaction(iid, target_id, days_ago, channel, summary_tag, note, resolved=True,
                          competitor_mentioned=False, next_step=None, due_days_ago=None):
         interactions.append({
-            "interaction_id": iid, "target_type": "account", "target_id": target_id, "rep_id": "R100",
+            "interaction_id": iid, "target_type": "account", "target_id": target_id, "rep_id": "L100",
             "occurred_at": iso(DEMO_DATE - timedelta(days=days_ago)), "channel": channel,
             "summary_tag": summary_tag, "note": note,
             "next_step": next_step or "", "due_date": iso(DEMO_DATE - timedelta(days=due_days_ago)) if due_days_ago else "",
@@ -167,14 +167,14 @@ def build_r100_prospects():
     lat, lon = jitter_latlon("台北")
     prospects.append({
         "prospect_id": "P001", "name": "康悅診所", "specialty": "家醫科", "region": "台北",
-        "rep_id": "R100", "contact_stage": "uncontacted", "fit_band": "high",
+        "rep_id": "L100", "contact_stage": "uncontacted", "fit_band": "high",
         "lead_source": "區域普查名單", "source_updated_at": iso(DEMO_DATE - timedelta(days=5)),
         "explicit_interest": False, "lat": lat, "lon": lon,
     })
     lat, lon = jitter_latlon("台北")
     prospects.append({
         "prospect_id": "P002", "name": "青禾診所", "specialty": "內科", "region": "台北",
-        "rep_id": "R100", "contact_stage": "contacted", "fit_band": "high",
+        "rep_id": "L100", "contact_stage": "contacted", "fit_band": "high",
         "lead_source": "既有客戶轉介", "source_updated_at": iso(DEMO_DATE - timedelta(days=12)),
         "explicit_interest": True, "lat": lat, "lon": lon,
     })
@@ -182,7 +182,7 @@ def build_r100_prospects():
     lat, lon = jitter_latlon("台北")
     prospects.append({
         "prospect_id": "P003", "name": "遠山診所", "specialty": "骨科", "region": "台北",
-        "rep_id": "R100", "contact_stage": "uncontacted", "fit_band": "low",
+        "rep_id": "L100", "contact_stage": "uncontacted", "fit_band": "low",
         "lead_source": "公開名冊", "source_updated_at": iso(DEMO_DATE - timedelta(days=90)),
         "explicit_interest": False, "lat": lat, "lon": lon,
     })
@@ -191,7 +191,7 @@ def build_r100_prospects():
     lat, lon = jitter_latlon("台北")
     prospects.append({
         "prospect_id": "P005", "name": "岳華診所", "specialty": "皮膚科", "region": "台北",
-        "rep_id": "R100", "contact_stage": "uncontacted", "fit_band": "medium",
+        "rep_id": "L100", "contact_stage": "uncontacted", "fit_band": "medium",
         "lead_source": "公開名冊", "source_updated_at": iso(DEMO_DATE - timedelta(days=40)),
         "explicit_interest": False, "lat": lat, "lon": lon,
     })
@@ -199,7 +199,7 @@ def build_r100_prospects():
     lat, lon = jitter_latlon("台北")
     prospects.append({
         "prospect_id": "P004", "name": "晴天診所", "specialty": "家醫科", "region": "台北",
-        "rep_id": "R100", "contact_stage": "appointment", "fit_band": "high",
+        "rep_id": "L100", "contact_stage": "appointment", "fit_band": "high",
         "lead_source": "展會名單", "source_updated_at": iso(DEMO_DATE - timedelta(days=20)),
         "explicit_interest": True, "lat": lat, "lon": lon,
     })
@@ -208,17 +208,17 @@ def build_r100_prospects():
 
 def build_r100_appointments():
     return [
-        {"appointment_id": "AP001", "rep_id": "R100", "target_id": "P004",
+        {"appointment_id": "AP001", "rep_id": "L100", "target_id": "P004",
          "appointment_date": iso(DEMO_DATE), "start_time": "09:30", "duration_minutes": 40,
          "action_mode": "visit", "purpose": "新診所首次拜訪", "status": "fixed"},
-        {"appointment_id": "AP002", "rep_id": "R100", "target_id": "A008",
+        {"appointment_id": "AP002", "rep_id": "L100", "target_id": "A008",
          "appointment_date": iso(DEMO_DATE), "start_time": "14:00", "duration_minutes": 30,
          "action_mode": "visit", "purpose": "既定季度回訪", "status": "fixed"},
     ]
 
 
 def build_other_rep_data(rep_id: str, region: str, n_accounts=9, n_prospects=4):
-    """R101/R102：用簡單機率規則產生，不強求精確任務數量，只求資料合理豐富。"""
+    """L101/R102：用簡單機率規則產生，不強求精確任務數量，只求資料合理豐富。"""
     accounts, prospects, interactions, orders, appointments = [], [], [], [], []
 
     for i in range(1, n_accounts + 1):
@@ -286,7 +286,7 @@ def generate_all():
     all_prospects += build_r100_prospects()
     all_appointments += build_r100_appointments()
 
-    for rep_id, region in [("R101", "新北"), ("R102", "桃園")]:
+    for rep_id, region in [("L101", "新北"), ("L102", "桃園")]:
         accounts, prospects, interactions, orders, appointments = build_other_rep_data(rep_id, region)
         all_accounts += accounts
         all_prospects += prospects
