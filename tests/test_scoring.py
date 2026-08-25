@@ -80,3 +80,46 @@ def test_task_id_and_generation_key_are_deterministic():
     tasks2 = score_candidates([make_candidate()], "R100", DEMO_DATE)
     assert tasks1[0].task_id == tasks2[0].task_id
     assert tasks1[0].generation_key == tasks2[0].generation_key
+
+
+def test_percentile_tie_gives_equal_scores_not_zero_and_hundred():
+    a = make_candidate(target_id="A001", raw_signal=80, raw_business_value=80, urgency_score=100)
+    b = make_candidate(target_id="A002", raw_signal=80, raw_business_value=80, urgency_score=100)
+    tasks = score_candidates([a, b], "R100", DEMO_DATE)
+    by_id = {t.target_id: t for t in tasks}
+    assert by_id["A001"].signal_score == by_id["A002"].signal_score == 50.0
+    assert by_id["A001"].business_value_score == by_id["A002"].business_value_score == 50.0
+
+
+def test_percentile_three_way_tie_all_equal():
+    candidates = [make_candidate(target_id=f"A00{i}", raw_signal=50, raw_business_value=50,
+                                  urgency_score=100) for i in range(3)]
+    tasks = score_candidates(candidates, "R100", DEMO_DATE)
+    scores = {t.signal_score for t in tasks}
+    assert scores == {50.0}
+
+
+def test_cost_penalty_phone_is_two_regardless_of_distance():
+    c = make_candidate(action_mode=ActionMode.PHONE, lat=30.0, lon=130.0, urgency_score=100)
+    tasks = score_candidates([c], "R100", DEMO_DATE, rep_home_lat=25.0, rep_home_lon=121.0)
+    assert tasks[0].cost_penalty == 2.0
+
+
+def test_cost_penalty_missing_rep_home_falls_back_to_missing_distance_tier():
+    c = make_candidate(urgency_score=100)
+    tasks = score_candidates([c], "R100", DEMO_DATE, rep_home_lat=None, rep_home_lon=None)
+    assert tasks[0].cost_penalty == 12.0
+
+
+def test_cost_penalty_short_visit_distance_is_lowest_visit_tier():
+    # 候選就在業務駐地旁邊，車程幾乎是 0 分鐘 -> <=30 分鐘那一級
+    c = make_candidate(lat=25.001, lon=121.001, urgency_score=100)
+    tasks = score_candidates([c], "R100", DEMO_DATE, rep_home_lat=25.0, rep_home_lon=121.0)
+    assert tasks[0].cost_penalty == 6.0
+
+
+def test_cost_penalty_long_visit_distance_is_highest_visit_tier():
+    # 候選離業務駐地很遠（直線距離換算車程遠超過 60 分鐘）-> 最高一級
+    c = make_candidate(lat=26.5, lon=122.5, urgency_score=100)
+    tasks = score_candidates([c], "R100", DEMO_DATE, rep_home_lat=25.0, rep_home_lon=121.0)
+    assert tasks[0].cost_penalty == 15.0

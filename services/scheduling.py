@@ -6,9 +6,15 @@
 """
 from __future__ import annotations
 
-import math
+from dataclasses import replace
 
+from domain.geo import haversine_km
 from domain.models import ActionMode, FixedAppointment, Task, TaskType
+
+# SPEC §12.2 沒有定義營業時段的起訖時間，這是唯一需要自己假設的地方：
+# 一般外勤業務的工作時段，用來把一天依固定預約切成好幾個可排點的時段。
+DEFAULT_DAY_START = "08:30"
+DEFAULT_DAY_END = "18:00"
 
 _EVIDENCE_RANK = {"weak": 0, "medium": 1, "strong": 2}
 
@@ -64,45 +70,82 @@ def allocate_daily_capacity(
     return selected, remaining
 
 
-def _haversine_km(lat1, lon1, lat2, lon2) -> float:
-    r = 6371.0
-    p1, p2 = math.radians(lat1), math.radians(lat2)
-    dphi = math.radians(lat2 - lat1)
-    dlambda = math.radians(lon2 - lon1)
-    a = math.sin(dphi / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dlambda / 2) ** 2
-    return 2 * r * math.asin(min(1.0, math.sqrt(a)))
+def _minutes_since_midnight(hhmm: str) -> int:
+    h, m = hhmm.split(":")
+    return int(h) * 60 + int(m)
+
+
+def _hhmm(total_minutes: int) -> str:
+    h, m = divmod(max(0, total_minutes), 60)
+    return f"{h % 24:02d}:{m:02d}"
 
 
 def build_visit_sequence(
     selected_tasks: list[Task],
     fixed_appointments: list[FixedAppointment],
+    home_lat: float | None = None,
+    home_lon: float | None = None,
+    day_start: str = DEFAULT_DAY_START,
+    day_end: str = DEFAULT_DAY_END,
 ) -> list[Task]:
     """
-    只排 action_mode=visit 且有座標的任務（SPEC §12.1）。
-    簡單 nearest-neighbor：從上一個固定點出發（沒有固定預約時，從分數最高的任務出發），
-    每次挑最近的下一個未排點位。這是示意用的簡化啟發式，不是真實路網最佳化
-    （UI 文案不可以講「最佳路線」）。
+    只排 action_mode=visit 且有座標的任務（SPEC §12.1）。依 SPEC §12.2 的五步驟：
+    1. 依固定 appointment time 切分可用時段（day_start/day_end 是唯一自己假設的部分）。
+    2. 每個時段從上一個固定點、或業務駐地座標（沒有的話退回分數最高的候選）出發。
+    3. 時段內用最近鄰依序排入還沒排的 visit 任務，直到這個時段時間用完就換下一段。
+    4. 同距離以較高 value_score 排前。
+    5. 不呼叫外部路網 API，用 haversine 直線距離示意，不是真實路網最佳化
+       （UI 文案不可以講「最佳路線」）。
+
+    回傳的 Task 是帶了 scheduled_start_time（HH:MM，示意用）的副本，不影響傳入的原物件。
+    某個時段容量塞不下的任務會直接跳過（不會硬塞進不合理的時段），可能導致
+    result 少於 selected_tasks 裡的 visit 任務數——這是容量分配（依總分鐘數）跟
+    實際切時段（依固定預約把一天切碎）本來就可能對不齊的正常結果，不是 bug。
     """
     visit_tasks = [t for t in selected_tasks if t.action_mode == ActionMode.VISIT and t.lat is not None and t.lon is not None]
     if not visit_tasks:
         return []
 
+    sorted_fixed = sorted(fixed_appointments, key=lambda a: a.start_time)
+    day_end_min = _minutes_since_midnight(day_end)
+
+    segments: list[tuple[int, int, float | None, float | None]] = []
+    cursor_min = _minutes_since_midnight(day_start)
+    cursor_lat, cursor_lon = home_lat, home_lon
+    for ap in sorted_fixed:
+        ap_start = _minutes_since_midnight(ap.start_time)
+        if ap_start > cursor_min:
+            segments.append((cursor_min, ap_start, cursor_lat, cursor_lon))
+        cursor_min = max(cursor_min, ap_start + ap.duration_minutes)
+        if ap.lat is not None and ap.lon is not None:
+            cursor_lat, cursor_lon = ap.lat, ap.lon
+    if cursor_min < day_end_min:
+        segments.append((cursor_min, day_end_min, cursor_lat, cursor_lon))
+    if not segments:
+        segments = [(cursor_min, cursor_min + sum(t.estimated_minutes for t in visit_tasks), cursor_lat, cursor_lon)]
+
     remaining = list(visit_tasks)
     ordered: list[Task] = []
 
-    fixed_with_coords = [ap for ap in fixed_appointments if ap.lat is not None and ap.lon is not None]
-    if fixed_with_coords:
-        cur_lat, cur_lon = fixed_with_coords[0].lat, fixed_with_coords[0].lon
-    else:
-        first = min(remaining, key=lambda t: (-t.value_score, t.task_id))
-        remaining.remove(first)
-        ordered.append(first)
-        cur_lat, cur_lon = first.lat, first.lon
+    for seg_start, seg_end, seg_lat, seg_lon in segments:
+        if not remaining:
+            break
+        capacity = seg_end - seg_start
+        cur_lat, cur_lon = seg_lat, seg_lon
+        cur_min = seg_start
+        if cur_lat is None or cur_lon is None:
+            first = min(remaining, key=lambda t: (-t.value_score, t.task_id))
+            cur_lat, cur_lon = first.lat, first.lon
 
-    while remaining:
-        remaining.sort(key=lambda t: (_haversine_km(cur_lat, cur_lon, t.lat, t.lon), -t.value_score, t.task_id))
-        nxt = remaining.pop(0)
-        ordered.append(nxt)
-        cur_lat, cur_lon = nxt.lat, nxt.lon
+        while remaining and capacity > 0:
+            remaining.sort(key=lambda t: (haversine_km(cur_lat, cur_lon, t.lat, t.lon), -t.value_score, t.task_id))
+            candidate = remaining[0]
+            if candidate.estimated_minutes > capacity:
+                break
+            remaining.pop(0)
+            ordered.append(replace(candidate, scheduled_start_time=_hhmm(cur_min)))
+            cur_min += candidate.estimated_minutes
+            capacity -= candidate.estimated_minutes
+            cur_lat, cur_lon = candidate.lat, candidate.lon
 
     return ordered

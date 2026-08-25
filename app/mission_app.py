@@ -53,7 +53,7 @@ nav = st.radio("導覽", PAGES, horizontal=True, key="mission_nav", label_visibi
 if nav == "今日任務":
     today_tasks.render(fixture_repo, task_repo, DEMO_DATE)
 elif nav == "任務詳情／審核":
-    task_detail.render(task_repo)
+    task_detail.render(task_repo, DEMO_DATE)
 elif nav == "行程":
     itinerary.render(fixture_repo, task_repo, DEMO_DATE)
 else:

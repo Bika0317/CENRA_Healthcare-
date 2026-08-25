@@ -33,7 +33,7 @@ def _reason_label(code: str) -> str:
     return dict(REVIEW_REASON_CODES).get(code, code)
 
 
-def render(task_repo) -> None:
+def render(task_repo, demo_date: date) -> None:
     task_id = st.session_state.get("selected_task_id")
     if not task_id:
         st.info("請先從「今日任務」頁面選擇一張任務。")
@@ -78,6 +78,17 @@ def render(task_repo) -> None:
     if task.status != TaskStatus.CANDIDATE:
         st.info(f"這張任務已經審核過，目前狀態：{STATUS_LABELS[task.status.value]}")
         _render_review_history(task_repo, task_id)
+        if task.status in (TaskStatus.ACCEPTED, TaskStatus.MODIFIED):
+            st.markdown("#### 排入行程")
+            st.caption("確認要把這張任務排進今天的電話／實訪行程，之後才能在「結果回報」頁回報結果。")
+            if st.button("排入今日行程", key=f"schedule-{task_id}"):
+                try:
+                    updated = task_repo.mark_scheduled(task_id)
+                except InvalidTransitionError as exc:
+                    st.error(f"無法排入行程：{exc}")
+                else:
+                    st.success(f"已排入今日行程，目前狀態：{STATUS_LABELS[updated.status.value]}")
+                    st.rerun()
         return
 
     st.markdown("#### 審核")
@@ -110,7 +121,8 @@ def render(task_repo) -> None:
     elif decision_label == "延後":
         decision = ReviewDecision.DEFER
         deferred_to = st.date_input(
-            "延後至", value=date.today() + timedelta(days=1), key=f"defer-{task_id}",
+            "延後至", value=demo_date + timedelta(days=1), min_value=demo_date + timedelta(days=1),
+            key=f"defer-{task_id}",
         )
         reason_code = st.selectbox(
             "延後原因", options=_reason_options(), format_func=_reason_label, key=f"dreason-{task_id}",

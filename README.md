@@ -71,7 +71,7 @@ streamlit run app/mission_app.py
 
 | 檔案 | 欄位（依序） |
 |---|---|
-| `reps.csv` | rep_id, rep_name, region, email, daily_available_minutes |
+| `reps.csv` | rep_id, rep_name, region, email, daily_available_minutes, home_lat, home_lon |
 | `accounts.csv` | account_id, name, specialty, region, status(active/at_risk/inactive), rep_id, lat, lon, value_band(high/medium/low), created_at, updated_at |
 | `prospects.csv` | prospect_id, name, specialty, region, rep_id, contact_stage(uncontacted/contacted/appointment/trial), fit_band(high/medium/low), lead_source, source_updated_at, explicit_interest(bool), lat, lon |
 | `interactions.csv` | interaction_id, target_type(account/prospect), target_id, rep_id, occurred_at, channel(visit/phone/event), summary_tag, note, next_step, due_date, resolved(bool), competitor_mentioned(bool) |
@@ -100,15 +100,20 @@ API。地圖上的點位順序是簡化的 nearest-neighbor 示意，不是即�
 成交機率排序＋公司 KPI Dashboard）留下的程式碼，**保留但新版 `app/mission_app.py` 不使用、不 import**。
 仍可用 `streamlit run app/dashboard.py` 獨立執行。對應的說明文件搬到 `docs/legacy_v1/`。
 
+舊版線上展示（Streamlit Community Cloud，跑的是 `app/dashboard.py`，不是 CENRA Mission）：
+https://esxawprwq7kwnvghmr8mbe.streamlit.app/
+
 ## 已知限制
 
 - P1（不阻塞 P0，但這次沒做）：主管任務覆蓋視圖、跨日任務結果分析、多策略情境設定、Excel 匯出。
 - P2（這次刻意不做）：真實 CRM／ERP／SAP／OA 串接、真實 LINE 或 Email 發送、真實路網／導航／最佳化
   API、監督式成交／流失／uplift 模型、即時線上模型重訓、自動產品推薦、登入／SSO／角色權限管理。
-- 百分位評分在候選數很少時（例如同批次只有 2 個同類型候選）會偏向極端值，這是規格本身留白的地方，
-  目前用擴充 fixture 樣本數繞過，公式本身沒有處理小樣本或同分（tie）的規則。
-- 點位順序目前是單一路線的 nearest-neighbor，沒有依固定預約切分多個時段。
-- 延後（defer）任務目前沒有在 `deferred_to` 那天自動重新出現的邏輯。
+- 執行成本懲罰（SPEC §11.2）用業務駐地座標到候選座標的 haversine 直線距離換算車程分鐘數分級，
+  假設均速 25 km/h——這是唯一需要自己假設的數字，不是真實路網時間，也不宣稱是。
+- 點位順序（SPEC §12.2）依固定預約把一天切成好幾個時段，每段各自從上一個固定點（或業務駐地）
+  出發排最近鄰；假設一天的工作時段是 08:30–18:00，SPEC 沒定義這個範圍，是自己假設的。
+- 延後（defer）任務會在 `deferred_to` 那天被 `build_daily_plan()` 自動轉回候選（`task_repo.resurface_deferred_tasks()`）；
+  已知取捨：分數沿用原本產生當天的計算結果，不會重新跑一次百分位。
 
 ## 不需要的外部服務／金鑰
 

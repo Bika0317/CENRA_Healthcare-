@@ -49,13 +49,18 @@ def iso(d) -> str:
 # reps
 # ---------------------------------------------------------------------------
 
+def _rep_home(region: str):
+    lat, lon = REGION_CENTERS[region]
+    return round(lat, 5), round(lon, 5)
+
+
 REPS = [
     {"rep_id": "R100", "rep_name": "陳雅婷", "region": "台北", "email": "r100@cenra-demo.internal",
-     "daily_available_minutes": 240},
+     "daily_available_minutes": 240, "home_lat": _rep_home("台北")[0], "home_lon": _rep_home("台北")[1]},
     {"rep_id": "R101", "rep_name": "林柏宇", "region": "新北", "email": "r101@cenra-demo.internal",
-     "daily_available_minutes": 240},
+     "daily_available_minutes": 240, "home_lat": _rep_home("新北")[0], "home_lon": _rep_home("新北")[1]},
     {"rep_id": "R102", "rep_name": "黃思穎", "region": "桃園", "email": "r102@cenra-demo.internal",
-     "daily_available_minutes": 240},
+     "daily_available_minutes": 240, "home_lat": _rep_home("桃園")[0], "home_lon": _rep_home("桃園")[1]},
 ]
 
 
@@ -290,7 +295,7 @@ def generate_all():
         all_appointments += appointments
 
     write_csv(REPS, "reps.csv",
-              ["rep_id", "rep_name", "region", "email", "daily_available_minutes"])
+              ["rep_id", "rep_name", "region", "email", "daily_available_minutes", "home_lat", "home_lon"])
     write_csv(all_accounts, "accounts.csv",
               ["account_id", "name", "specialty", "region", "status", "rep_id", "lat", "lon",
                "value_band", "created_at", "updated_at"])

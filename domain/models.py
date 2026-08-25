@@ -119,6 +119,10 @@ class Task:
     model_version: str = "rules-v1"
     status: TaskStatus = TaskStatus.CANDIDATE
     evidences: list[Evidence] = field(default_factory=list)
+    # 只有在 DailyPlan.visit_sequence 裡的 Task 副本才會有值（services/scheduling.py
+    # 依固定預約切時段後算出來的示意時間），不持久化到 SQLite——每次都是現算，
+    # 從 DB 讀出來的 Task 這個欄位一律是 None。
+    scheduled_start_time: str | None = None
 
 
 @dataclass
