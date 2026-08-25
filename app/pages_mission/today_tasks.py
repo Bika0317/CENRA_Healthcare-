@@ -59,6 +59,12 @@ def render(fixture_repo, task_repo, demo_date) -> None:
     st.session_state["selected_available_minutes"] = available_minutes
 
     if st.button("重新產生今日任務", key="regen_plan"):
+        # build_daily_plan() 本來就每次都重算，這個按鈕唯一該做的額外事情是把行程頁
+        # 使用者手動調整過的點位順序重置掉，並給明確的「有反應」提示——不然單純
+        # rerun() 因為資料本來就是新的，畫面完全不會變，會讓人以為按鈕壞了。
+        st.session_state.pop("itinerary_visit_order", None)
+        st.session_state.pop("itinerary_visit_order_source", None)
+        st.toast("已重新產生今日任務清單。")
         st.rerun()
 
     # 每次都直接重算，不快取：build_daily_plan() 本身依 generation_key idempotent，
@@ -128,8 +134,8 @@ def render(fixture_repo, task_repo, demo_date) -> None:
     confirm_reset = st.checkbox("我確定要重設 Demo 資料", key="confirm_reset_demo")
     if st.button("重設 Demo", disabled=not confirm_reset, key="reset_demo_btn"):
         task_repo.reset_demo()
-        st.session_state.pop("daily_plan_cache", None)
-        st.session_state.pop("daily_plan_cache_key", None)
+        st.session_state.pop("itinerary_visit_order", None)
+        st.session_state.pop("itinerary_visit_order_source", None)
         st.session_state.pop("confirm_reset_demo", None)
         st.success("已重設 Demo 資料。")
         st.rerun()
