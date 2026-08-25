@@ -32,7 +32,7 @@ def test_tasks_are_split_across_fixed_appointment_segments():
     # 第一段只有 09:30-10:00（30 分鐘），塞不下一個 45 分鐘的任務，
     # 應該被跳過、留給固定預約結束後的第二段。
     fixed = [FixedAppointment(
-        appointment_id="AP1", rep_id="R100", target_id="A999", target_name="固定預約診所",
+        appointment_id="AP1", rep_id="L100", target_id="A999", target_name="固定預約診所",
         appointment_date=date(2026, 8, 25), start_time="10:00", duration_minutes=30,
         action_mode=ActionMode.VISIT, purpose="既定回訪", status="fixed", lat=25.05, lon=121.58,
     )]
@@ -47,7 +47,7 @@ def test_task_that_does_not_fit_any_segment_is_dropped_not_crammed():
     home_lat, home_lon = 25.0330, 121.5654
     # 兩個固定預約幾乎佔滿整天，只留一個 20 分鐘的小縫，但任務要 45 分鐘
     fixed = [
-        FixedAppointment(appointment_id="AP1", rep_id="R100", target_id="A1", target_name="A",
+        FixedAppointment(appointment_id="AP1", rep_id="L100", target_id="A1", target_name="A",
                           appointment_date=date(2026, 8, 25), start_time="08:30", duration_minutes=540,
                           action_mode=ActionMode.VISIT, purpose="x", status="fixed", lat=25.03, lon=121.56),
     ]

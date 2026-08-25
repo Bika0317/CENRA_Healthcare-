@@ -33,7 +33,7 @@ REGION_CENTERS = {
 def gen_reps():
     names = [fake.name() for _ in range(N_REPS)]
     reps = pd.DataFrame({
-        "rep_id": [f"R{100+i}" for i in range(N_REPS)],
+        "rep_id": [f"L{100+i}" for i in range(N_REPS)],
         "rep_name": names,
         "region": rng.choice(REGIONS, N_REPS),
         "email": [f"rep{100+i}@cenra-demo.internal" for i in range(N_REPS)],

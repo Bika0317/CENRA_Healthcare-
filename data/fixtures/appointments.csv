@@ -1,3 +1,3 @@
 ﻿appointment_id,rep_id,target_id,appointment_date,start_time,duration_minutes,action_mode,purpose,status
-AP001,R100,P004,2026-08-25,09:30,40,visit,新診所首次拜訪,fixed
-AP002,R100,A008,2026-08-25,14:00,30,visit,既定季度回訪,fixed
+AP001,L100,P004,2026-08-25,09:30,40,visit,新診所首次拜訪,fixed
+AP002,L100,A008,2026-08-25,14:00,30,visit,既定季度回訪,fixed

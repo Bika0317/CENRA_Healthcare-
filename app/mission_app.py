@@ -57,5 +57,5 @@ elif nav == "任務詳情／審核":
 elif nav == "行程":
     itinerary.render(fixture_repo, task_repo, DEMO_DATE)
 else:
-    rep_id = st.session_state.get("selected_rep_id", "R100")
+    rep_id = st.session_state.get("selected_rep_id", "L100")
     outcomes.render(task_repo, rep_id, DEMO_DATE)
