@@ -28,15 +28,16 @@ def build_daily_plan(rep_id: str, plan_date: date, available_minutes: int,
     if new_tasks:
         task_repo.save_tasks(new_tasks)
 
-    candidate_tasks = [
-        t for t in task_repo.get_candidate_tasks(rep_id, plan_date)
-        if t.status == TaskStatus.CANDIDATE
-    ]
+    # candidate_tasks 依契約（00_CONTRACTS.md）要含這批次「所有 status」，不是只有還沒審核的，
+    # UI 才能顯示已採納/已排程/已完成的任務卡。容量分配只該從「還沒審核」的子集裡挑，
+    # 已經審核過的任務不該被重新建議一次。
+    candidate_tasks = task_repo.get_candidate_tasks(rep_id, plan_date)
+    still_pending = [t for t in candidate_tasks if t.status == TaskStatus.CANDIDATE]
 
     fixed_appointments = fixture_repo.get_fixed_appointments(rep_id, plan_date)
 
     suggested_tasks, remaining_minutes = allocate_daily_capacity(
-        candidate_tasks, fixed_appointments, available_minutes
+        still_pending, fixed_appointments, available_minutes
     )
 
     visit_sequence = build_visit_sequence(suggested_tasks, fixed_appointments)

@@ -7,3 +7,4 @@ faker
 joblib
 openpyxl
 starlette==0.47.2
+pytest
