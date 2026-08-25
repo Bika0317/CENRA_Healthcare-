@@ -247,3 +247,33 @@ class TaskRepository:
         for table in ("task_outcomes", "task_reviews", "task_evidence", "tasks"):
             cur.execute(f"DELETE FROM {table}")
         self._conn.commit()
+
+    # -- deferred task resurfacing --------------------------------------------
+    def resurface_deferred_tasks(self, rep_id: str, as_of: date) -> int:
+        """把 deferred_to <= as_of 的 deferred 任務轉回 candidate、task_date 更新成
+        as_of，這樣才會出現在 as_of 那天的候選清單裡（原本的 deferred_to 只存在
+        task_reviews，沒有任何邏輯讀它，是先前留的缺口，這裡補上）。回傳處理筆數。
+
+        已知取捨：分數（value_score 等）沿用原本產生當天的計算結果，不會針對
+        as_of 這天重新跑一次百分位；同一個對象/任務類型如果剛好在 as_of 又被
+        引擎重新判定為候選，會產生一筆 generation_key 不同的新任務，兩筆並存
+        （不會自動去重），這在單日固定 demo 資料下不會發生，但多日情境要注意。
+        """
+        cur = self._conn.cursor()
+        rows = cur.execute(
+            """SELECT t.task_id FROM tasks t
+               JOIN task_reviews r ON r.task_id = t.task_id AND r.decision = 'defer'
+               WHERE t.rep_id = ? AND t.status = 'deferred' AND r.deferred_to <= ?""",
+            (rep_id, as_of.isoformat()),
+        ).fetchall()
+        try:
+            for row in rows:
+                cur.execute(
+                    "UPDATE tasks SET status = 'candidate', task_date = ? WHERE task_id = ?",
+                    (as_of.isoformat(), row["task_id"]),
+                )
+            self._conn.commit()
+        except Exception:
+            self._conn.rollback()
+            raise
+        return len(rows)

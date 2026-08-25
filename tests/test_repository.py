@@ -119,3 +119,48 @@ def test_fixture_repository_loads_and_validates(fixture_repo):
     assert len(r100_accounts) == 10
     r100_prospects = fixture_repo.get_prospects("R100")
     assert len(r100_prospects) == 5
+
+
+def test_fixture_repository_reps_have_home_coordinates(fixture_repo):
+    r100 = fixture_repo.get_rep("R100")
+    assert r100["home_lat"] is not None
+    assert r100["home_lon"] is not None
+
+
+def test_resurface_deferred_tasks_brings_task_back_as_candidate(task_repo):
+    from datetime import timedelta
+    t = make_task(task_id="T-DEFER-1", generation_key="GEN-DEFER-1")
+    task_repo.save_tasks([t])
+    deferred_to = t.task_date + timedelta(days=3)
+    task_repo.apply_review(
+        t.task_id, ReviewDecision.DEFER, modified_objective=None, modified_action_mode=None,
+        reason_code="wrong_timing", reason_note=None, deferred_to=deferred_to, actor_rep_id="R100",
+    )
+    assert task_repo.get_task(t.task_id).status.value == "deferred"
+
+    # 還沒到 deferred_to，不該被喚醒
+    n = task_repo.resurface_deferred_tasks("R100", t.task_date + timedelta(days=1))
+    assert n == 0
+    assert task_repo.get_task(t.task_id).status.value == "deferred"
+
+    # 到了（或過了）deferred_to，應該變回 candidate，task_date 更新成查詢日期
+    n = task_repo.resurface_deferred_tasks("R100", deferred_to)
+    assert n == 1
+    resurfaced = task_repo.get_task(t.task_id)
+    assert resurfaced.status.value == "candidate"
+    assert resurfaced.task_date == deferred_to
+    assert resurfaced.task_id in [x.task_id for x in task_repo.get_candidate_tasks("R100", deferred_to)]
+
+
+def test_resurface_deferred_tasks_ignores_other_reps(task_repo):
+    from datetime import timedelta
+    t = make_task(task_id="T-DEFER-2", generation_key="GEN-DEFER-2", rep_id="R101")
+    task_repo.save_tasks([t])
+    deferred_to = t.task_date + timedelta(days=3)
+    task_repo.apply_review(
+        t.task_id, ReviewDecision.DEFER, modified_objective=None, modified_action_mode=None,
+        reason_code="wrong_timing", reason_note=None, deferred_to=deferred_to, actor_rep_id="R101",
+    )
+    n = task_repo.resurface_deferred_tasks("R100", deferred_to)  # 查別的業務
+    assert n == 0
+    assert task_repo.get_task(t.task_id).status.value == "deferred"

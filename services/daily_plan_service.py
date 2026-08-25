@@ -15,16 +15,22 @@ from services.scoring import score_candidates
 def build_daily_plan(rep_id: str, plan_date: date, available_minutes: int,
                       fixture_repo, task_repo) -> DailyPlan:
     """
-    1. 三引擎各自產生候選 -> 2. 統一評分 -> 3. 存入 task_repository（idempotent，
-    同 generation_key 不重複寫入）-> 4. 取回今天全部 candidate 任務（含歷史已存在的）
-    -> 5. 固定預約 + 容量分配 + 三類最低配額 -> 6. nearest-neighbor 點位順序。
+    0. 把過了 deferred_to 的延後任務轉回候選 -> 1. 三引擎各自產生新候選 -> 2. 統一評分
+    （含依業務駐地座標估算的交通成本懲罰）-> 3. 存入 task_repository（idempotent，
+    同 generation_key 不重複寫入）-> 4. 取回今天全部候選任務（含歷史已存在的）
+    -> 5. 固定預約 + 容量分配 + 三類最低配額 -> 6. 依固定預約切時段的 nearest-neighbor 點位順序。
     """
+    task_repo.resurface_deferred_tasks(rep_id, plan_date)
+
+    rep = fixture_repo.get_rep(rep_id)
+    rep_home_lat, rep_home_lon = rep.get("home_lat"), rep.get("home_lon")
+
     candidates = (
         attack.generate_candidates(fixture_repo, rep_id, plan_date)
         + defend.generate_candidates(fixture_repo, rep_id, plan_date)
         + grow.generate_candidates(fixture_repo, rep_id, plan_date)
     )
-    new_tasks = score_candidates(candidates, rep_id, plan_date)
+    new_tasks = score_candidates(candidates, rep_id, plan_date, rep_home_lat, rep_home_lon)
     if new_tasks:
         task_repo.save_tasks(new_tasks)
 
@@ -40,7 +46,9 @@ def build_daily_plan(rep_id: str, plan_date: date, available_minutes: int,
         still_pending, fixed_appointments, available_minutes
     )
 
-    visit_sequence = build_visit_sequence(suggested_tasks, fixed_appointments)
+    visit_sequence = build_visit_sequence(
+        suggested_tasks, fixed_appointments, rep_home_lat, rep_home_lon
+    )
 
     return DailyPlan(
         rep_id=rep_id, plan_date=plan_date, available_minutes=available_minutes,

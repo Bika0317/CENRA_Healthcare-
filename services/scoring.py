@@ -8,34 +8,51 @@ from __future__ import annotations
 import hashlib
 from datetime import date, datetime
 
+from domain.geo import haversine_km
 from domain.models import ActionMode, Task, TaskStatus, TaskType
 from engines.candidate import Candidate
 
 VALUE_SCORE_THRESHOLD = 45
 EVIDENCE_SCORE_THRESHOLD = 40
 
+# SPEC 沒有規定路網速度，這是唯一需要自己假設的數字：郊區/市區混合車程的粗估均速，
+# 只用來把 haversine 直線距離換算成分鐘數，分到 SPEC §11.2 的三個等級，不宣稱是真實路網時間。
+_AVG_TRAVEL_SPEED_KMH = 25.0
+
 _WEIGHTS = dict(signal=0.30, business_value=0.25, urgency=0.20, evidence=0.15, strategy_fit=0.10)
 
 
 def _percentile_scores(raw_values: list[float]) -> list[float]:
-    """單一候選時回傳 70（避免自動變 100）；否則依排名轉成 0-100 百分位。"""
+    """單一候選時回傳 70（避免自動變 100）；否則依排名轉成 0-100 百分位。
+    同分用平均名次（fractional ranking），避免兩個原始分數幾乎相同的候選被
+    百分位硬拆成 0 和 100 這種不合理的極端值（n 很小時尤其明顯）。"""
     n = len(raw_values)
     if n == 1:
         return [70.0]
-    order = sorted(range(n), key=lambda i: raw_values[i])
-    ranks = [0] * n
-    for rank, idx in enumerate(order):
-        ranks[idx] = rank
-    return [100.0 * r / (n - 1) for r in ranks]
+    sorted_vals = sorted(raw_values)
+    scores = []
+    for v in raw_values:
+        equal_positions = [i for i, sv in enumerate(sorted_vals) if sv == v]
+        avg_rank = sum(equal_positions) / len(equal_positions)
+        scores.append(100.0 * avg_rank / (n - 1))
+    return scores
 
 
-def _cost_penalty(candidate: Candidate) -> float:
+def _cost_penalty(candidate: Candidate, rep_home_lat: float | None, rep_home_lon: float | None) -> float:
+    """SPEC §11.2：phone=2；visit 依粗估交通分鐘數分三級（<=30/31-60/>60）；
+    缺距離資料（沒有業務駐地座標或候選本身沒座標）＝12。「額外準備成本 0-5」
+    SPEC 沒定義判斷依據，這裡不硬編一個數字，維持 0（不納入合計）。"""
     if candidate.action_mode == ActionMode.PHONE:
         return 2.0
-    if not candidate.has_distance_data:
+    if not candidate.has_distance_data or rep_home_lat is None or rep_home_lon is None:
         return 12.0
-    # 簡化版：沒有真實路網距離，先假設實訪交通時間落在 <=30 分鐘這一級（SPEC §11.2）。
-    return 6.0
+    distance_km = haversine_km(rep_home_lat, rep_home_lon, candidate.lat, candidate.lon)
+    travel_minutes = distance_km / _AVG_TRAVEL_SPEED_KMH * 60
+    if travel_minutes <= 30:
+        return 6.0
+    if travel_minutes <= 60:
+        return 10.0
+    return 15.0
 
 
 def _make_task_id(rep_id: str, target_id: str, task_type: TaskType, task_date: date) -> tuple[str, str]:
@@ -46,8 +63,11 @@ def _make_task_id(rep_id: str, target_id: str, task_type: TaskType, task_date: d
     return task_id, generation_key
 
 
-def score_candidates(candidates: list[Candidate], rep_id: str, task_date: date) -> list[Task]:
-    """把同一批次的候選（可能混合攻/守/增）轉成正式 Task，含百分位評分與 clamp。"""
+def score_candidates(candidates: list[Candidate], rep_id: str, task_date: date,
+                      rep_home_lat: float | None = None, rep_home_lon: float | None = None) -> list[Task]:
+    """把同一批次的候選（可能混合攻/守/增）轉成正式 Task，含百分位評分與 clamp。
+    rep_home_lat/lon 用來估算 visit 任務的交通成本懲罰（SPEC §11.2），不提供時
+    一律視為缺距離資料（cost_penalty=12）。"""
     tasks: list[Task] = []
     by_type: dict[TaskType, list[Candidate]] = {}
     for c in candidates:
@@ -58,7 +78,7 @@ def score_candidates(candidates: list[Candidate], rep_id: str, task_date: date) 
         value_scores = _percentile_scores([c.raw_business_value for c in group])
 
         for candidate, signal_score, business_value_score in zip(group, signal_scores, value_scores):
-            cost_penalty = _cost_penalty(candidate)
+            cost_penalty = _cost_penalty(candidate, rep_home_lat, rep_home_lon)
             raw = (
                 _WEIGHTS["signal"] * signal_score
                 + _WEIGHTS["business_value"] * business_value_score

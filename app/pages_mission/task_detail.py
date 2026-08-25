@@ -33,7 +33,7 @@ def _reason_label(code: str) -> str:
     return dict(REVIEW_REASON_CODES).get(code, code)
 
 
-def render(task_repo) -> None:
+def render(task_repo, demo_date: date) -> None:
     task_id = st.session_state.get("selected_task_id")
     if not task_id:
         st.info("請先從「今日任務」頁面選擇一張任務。")
@@ -121,7 +121,8 @@ def render(task_repo) -> None:
     elif decision_label == "延後":
         decision = ReviewDecision.DEFER
         deferred_to = st.date_input(
-            "延後至", value=date.today() + timedelta(days=1), key=f"defer-{task_id}",
+            "延後至", value=demo_date + timedelta(days=1), min_value=demo_date + timedelta(days=1),
+            key=f"defer-{task_id}",
         )
         reason_code = st.selectbox(
             "延後原因", options=_reason_options(), format_func=_reason_label, key=f"dreason-{task_id}",

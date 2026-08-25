@@ -114,6 +114,7 @@ class Task:
     model_version: str = "rules-v1"
     status: TaskStatus = TaskStatus.CANDIDATE
     evidences: list[Evidence] = field(default_factory=list)  # 最多 3 筆主要證據
+    scheduled_start_time: str | None = None  # 只有 DailyPlan.visit_sequence 裡的副本會有值，不持久化
 
 
 @dataclass
@@ -191,7 +192,7 @@ def transition(task: Task, decision: ReviewDecision, **kwargs) -> Task:
 
 | 檔案 | 欄位（依序） |
 |---|---|
-| `reps.csv` | rep_id, rep_name, region, email, daily_available_minutes |
+| `reps.csv` | rep_id, rep_name, region, email, daily_available_minutes, home_lat, home_lon |
 | `accounts.csv` | account_id, name, specialty, region, status(active/at_risk/inactive), rep_id, lat, lon, value_band(high/medium/low), created_at, updated_at |
 | `prospects.csv` | prospect_id, name, specialty, region, rep_id, contact_stage(uncontacted/contacted/appointment/trial), fit_band(high/medium/low), lead_source, source_updated_at, explicit_interest(bool), lat, lon |
 | `interactions.csv` | interaction_id, target_type(account/prospect), target_id, rep_id, occurred_at, channel(visit/phone/event), summary_tag, note, next_step, due_date, resolved(bool), competitor_mentioned(bool) |
@@ -224,6 +225,7 @@ class TaskRepository:
     def apply_outcome(self, task_id: str, outcome: TaskOutcome) -> Task: ... # transaction: outcome + status 一起寫
     def get_review_history(self, task_id: str) -> list[TaskReview]: ...
     def reset_demo(self) -> None: ...     # 清空 tasks/evidence/review/outcome，回到固定初始狀態
+    def resurface_deferred_tasks(self, rep_id: str, as_of: date) -> int: ...  # deferred_to<=as_of 的任務轉回 candidate
 ```
 
 B 直接呼叫 `apply_review()` / `apply_outcome()`，不用自己寫 SQL。

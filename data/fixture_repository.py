@@ -70,7 +70,12 @@ class FixtureRepository:
             return list(csv.DictReader(f))
 
     def _load_reps(self):
-        return {r["rep_id"]: r for r in self._rows("reps.csv")}
+        out = {}
+        for r in self._rows("reps.csv"):
+            r["home_lat"] = _to_float(r.get("home_lat"))
+            r["home_lon"] = _to_float(r.get("home_lon"))
+            out[r["rep_id"]] = r
+        return out
 
     def _load_accounts(self):
         out = {}
@@ -121,6 +126,12 @@ class FixtureRepository:
         rep_ids = set(self.reps)
         account_ids = set(self.accounts)
         prospect_ids = set(self.prospects)
+
+        for rid, r in self.reps.items():
+            for field, rng in (("home_lat", TAIWAN_LAT_RANGE), ("home_lon", TAIWAN_LON_RANGE)):
+                v = r[field]
+                if v is not None and not (rng[0] <= v <= rng[1]):
+                    raise SchemaError(f"rep {rid} 的 {field}={v} 超出合理台灣範圍")
 
         for aid, a in self.accounts.items():
             if a["rep_id"] not in rep_ids:

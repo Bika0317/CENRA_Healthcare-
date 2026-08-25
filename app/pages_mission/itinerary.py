@@ -35,10 +35,18 @@ def render(fixture_repo, task_repo, demo_date) -> None:
     phone_tasks = [t for t in accepted if t.action_mode == ActionMode.PHONE]
     visit_tasks = {t.task_id: t for t in accepted if t.action_mode == ActionMode.VISIT}
 
+    rep = fixture_repo.get_rep(rep_id)
+
     # plan.visit_sequence 只涵蓋「還沒審核」的建議候選（daily_plan_service.py 的容量分配
     # 只會處理 still-pending 的任務），已經採納的任務不會出現在那裡——這裡要對「已採納的
     # 實訪任務」自己重算一次順序，不能直接拿 plan.visit_sequence 當初始值。
-    accepted_visit_sequence = build_visit_sequence(list(visit_tasks.values()), plan.fixed_appointments)
+    accepted_visit_sequence = build_visit_sequence(
+        list(visit_tasks.values()), plan.fixed_appointments, rep.get("home_lat"), rep.get("home_lon"),
+    )
+    # 依固定預約切時段後，可能有任務塞不進任何時段（時段容量比任務總分鐘數更零碎），
+    # scheduled_start_time 就是 None，不畫進地圖/順序清單，但還是要讓業務看到、能改成電話。
+    unscheduled_visit_ids = set(visit_tasks) - {t.task_id for t in accepted_visit_sequence}
+    scheduled_start_by_id = {t.task_id: t.scheduled_start_time for t in accepted_visit_sequence}
 
     order_key = "itinerary_visit_order"
     default_order = [t.task_id for t in accepted_visit_sequence]
@@ -61,14 +69,21 @@ def render(fixture_repo, task_repo, demo_date) -> None:
             st.caption("目前沒有已採納且有座標的實訪任務。")
         for i, task_id in enumerate(order):
             t = visit_tasks[task_id]
+            start_time = scheduled_start_by_id.get(task_id)
             row = st.columns([5, 1, 1])
-            row[0].write(f"{i + 1}. [{TASK_TYPE_LABELS[t.task_type.value]}] {t.target_name}　{t.objective}")
+            time_prefix = f"{start_time}　" if start_time else ""
+            row[0].write(f"{i + 1}. {time_prefix}[{TASK_TYPE_LABELS[t.task_type.value]}] {t.target_name}　{t.objective}")
             if row[1].button("↑", key=f"up-{task_id}", disabled=(i == 0)):
                 order[i - 1], order[i] = order[i], order[i - 1]
                 st.rerun()
             if row[2].button("↓", key=f"down-{task_id}", disabled=(i == len(order) - 1)):
                 order[i + 1], order[i] = order[i], order[i + 1]
                 st.rerun()
+        if unscheduled_visit_ids:
+            st.caption(
+                f"{len(unscheduled_visit_ids)} 筆已採納實訪任務今天的時段塞不下"
+                "（固定預約切出來的空檔都不夠），建議改電話或延後。"
+            )
 
     if order:
         ordered_tasks = [visit_tasks[tid] for tid in order]
@@ -78,8 +93,11 @@ def render(fixture_repo, task_repo, demo_date) -> None:
             text=[str(i + 1) for i in range(len(ordered_tasks))], textposition="top center",
             marker=dict(size=16, color="#D85A30"),
             line=dict(width=2, color="#888"),
-            hovertext=[f"{i + 1}. {t.target_name}（{TASK_TYPE_LABELS[t.task_type.value]}）"
-                       for i, t in enumerate(ordered_tasks)],
+            hovertext=[
+                f"{i + 1}. {t.target_name}（{TASK_TYPE_LABELS[t.task_type.value]}）"
+                + (f" · {scheduled_start_by_id.get(t.task_id)}" if scheduled_start_by_id.get(t.task_id) else "")
+                for i, t in enumerate(ordered_tasks)
+            ],
             hoverinfo="text",
         ))
         fig.update_layout(
