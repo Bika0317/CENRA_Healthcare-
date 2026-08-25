@@ -71,6 +71,17 @@ def render(fixture_repo, task_repo, demo_date) -> None:
     # 重算成本在 demo 規模下可忽略；快取反而會在審核/結果寫入後看到舊狀態（已踩過這個坑）。
     plan = build_daily_plan(rep_id, demo_date, available_minutes, fixture_repo, task_repo)
 
+    fixed_minutes = sum(ap.duration_minutes for ap in plan.fixed_appointments)
+    total_candidates = len(plan.candidate_tasks)
+    suggested_count = len(plan.suggested_tasks)
+    st.caption(
+        f"候選任務清單本身不會因為可用分鐘變動（共 {total_candidates} 張，是引擎依規則產生、"
+        f"分數篩過的全部候選）；會變的是下面每張卡片上的「⭐建議」——"
+        f"固定預約先占用 {fixed_minutes} 分鐘，剩下的 {available_minutes - fixed_minutes} 分鐘裡，"
+        f"目前可以排入 **{suggested_count}／{total_candidates}** 張任務（剩餘 {plan.remaining_minutes} 分鐘沒排滿）。"
+        "把上面的分鐘數調大，建議選取的張數才會跟著變多。"
+    )
+
     if plan.fixed_appointments:
         st.markdown("#### 今日固定預約")
         for ap in plan.fixed_appointments:
