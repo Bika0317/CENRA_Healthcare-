@@ -67,7 +67,9 @@ def _row_to_task(row: sqlite3.Row, evidences: list[Evidence]) -> Task:
 class TaskRepository:
     def __init__(self, db_path: str):
         self.db_path = db_path
-        self._conn = sqlite3.connect(db_path)
+        # check_same_thread=False：Streamlit 每次互動用新的 script-run thread 重跑，
+        # 但同一個 session 內對這個連線是循序存取（不會真的並發），單使用者 demo 下安全。
+        self._conn = sqlite3.connect(db_path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA foreign_keys = ON")
         self._conn.executescript(SCHEMA)
