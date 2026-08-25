@@ -100,6 +100,9 @@ API。地圖上的點位順序是簡化的 nearest-neighbor 示意，不是即�
 成交機率排序＋公司 KPI Dashboard）留下的程式碼，**保留但新版 `app/mission_app.py` 不使用、不 import**。
 仍可用 `streamlit run app/dashboard.py` 獨立執行。對應的說明文件搬到 `docs/legacy_v1/`。
 
+舊版線上展示（Streamlit Community Cloud，跑的是 `app/dashboard.py`，不是 CENRA Mission）：
+https://esxawprwq7kwnvghmr8mbe.streamlit.app/
+
 ## 已知限制
 
 - P1（不阻塞 P0，但這次沒做）：主管任務覆蓋視圖、跨日任務結果分析、多策略情境設定、Excel 匯出。
