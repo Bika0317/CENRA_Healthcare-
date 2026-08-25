@@ -28,7 +28,7 @@
 ## 驗證結果
 
 - `pytest tests/` 全數通過：**35 個測試**（`test_repository.py`、`test_engines.py`、`test_scoring.py`、`test_daily_plan_service.py`、`test_smoke.py`）。
-- SPEC AC-01（今日任務生成）逐字對齊：主要 demo 業務 R100 在 2026-08-25 產生剛好 **8 個候選任務**，攻 2／守 3／增 3。
+- SPEC AC-01（今日任務生成）逐字對齊：主要 demo 業務 L100 在 2026-08-25 產生剛好 **8 個候選任務**，攻 2／守 3／增 3。
 - 容量分配驗證：2 個固定預約（共 70 分鐘）＋建議任務（165 分鐘）＋剩餘 15 分鐘 = 240 分鐘彈性總量，不超額。
 - 重複執行 `build_daily_plan()` 驗證 idempotent：同一天同一業務不會重複寫入任務。
 
