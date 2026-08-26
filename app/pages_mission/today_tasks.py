@@ -64,26 +64,21 @@ def render(fixture_repo, task_repo, demo_date) -> None:
     reps = fixture_repo.get_reps()
     rep_names = {r["rep_id"]: r["rep_name"] for r in reps}
 
+    # 業務身份現在由 mission_app.py 右上角的帳號切換器決定，寫入 selected_rep_id；
+    # 這裡不再自己放一個「選擇業務」下拉——兩個地方各自能選業務會互相打架，也會
+    # 讓使用者搞不清楚該用哪一個切業務。mission_app.py 保證進這頁前一定有設好。
+    rep_id = st.session_state["selected_rep_id"]
+    st.caption(f"目前業務：{rep_names[rep_id]}（{rep_id}） · Demo 日期：{demo_date}（合成資料情境，非即時資料）")
+
     # Streamlit 有一個容易踩到的坑：widget 綁定的 session_state（用 key= 建立的那種），
     # 只要那個 widget 在某一輪完全沒被渲染到（例如使用者切去「行程」頁，
     # today_tasks.render() 整個沒執行），Streamlit 事後可能把它的 session_state 清掉；
-    # 回到這頁時 widget 會用自己的內建預設值重開（selectbox 用第一個選項、number_input
-    # 用 min_value），完全蓋掉使用者原本選的東西——不是「換業務才重置」這種可預期的行為，
-    # 是單純換頁就會消失。用下面這組非 widget 綁定的鏡像 key（本來就為了跨頁溝通而存在）
-    # 在 widget 狀態不見的時候把它復原回來，兩個 widget（業務選擇、可用分鐘）都要防。
-    rep_widget_key = "today_tasks_rep_id_widget"
-    if rep_widget_key not in st.session_state and "selected_rep_id" in st.session_state:
-        st.session_state[rep_widget_key] = st.session_state["selected_rep_id"]
-    rep_id = st.selectbox(
-        "選擇業務", options=list(rep_names.keys()), format_func=lambda r: f"{rep_names[r]}（{r}）",
-        key=rep_widget_key,
-    )
-    st.caption(f"Demo 日期：{demo_date}（合成資料情境，非即時資料）")
-
-    # 這裡也曾經每次都傳 value=default_minutes，結果使用者調整過的分鐘數下一輪就被蓋回
-    # 預設值——st.number_input 只要同時給 key 又給 value，每輪都會用 value 蓋掉使用者輸入。
-    # 現在只在「換了業務」時才重置成新業務自己的預設分鐘數；同一位業務、widget 狀態
-    # 因為換頁被清掉時，用 selected_available_minutes 鏡像復原，不會掉回 min_value(0)。
+    # 回到這頁時 widget 會用自己的內建預設值重開（number_input 用 min_value），
+    # 完全蓋掉使用者原本輸入的東西。這裡也曾經每次都傳 value=default_minutes，結果
+    # 使用者調整過的分鐘數下一輪就被蓋回預設值——st.number_input 只要同時給 key 又給
+    # value，每輪都會用 value 蓋掉使用者輸入。現在只在「換了業務」時才重置成新業務
+    # 自己的預設分鐘數；同一位業務、widget 狀態因為換頁被清掉時，用
+    # selected_available_minutes 鏡像復原，不會掉回 min_value(0)。
     minutes_key = "today_tasks_available_minutes_widget"
     minutes_for_rep_key = "today_tasks_available_minutes_for_rep"
     if st.session_state.get(minutes_for_rep_key) != rep_id:
@@ -96,8 +91,7 @@ def render(fixture_repo, task_repo, demo_date) -> None:
         "今日可用彈性分鐘", min_value=0, max_value=600, step=10, key=minutes_key,
     )
     # 這組是給行程頁／結果回報頁跨頁讀取用的鏡像（本來就存在），現在也兼職拿來
-    # 復原上面兩個 widget 被 Streamlit 意外清掉的狀態。
-    st.session_state["selected_rep_id"] = rep_id
+    # 復原上面這個 widget 被 Streamlit 意外清掉的狀態。
     st.session_state["selected_available_minutes"] = available_minutes
 
     if st.button("重新產生今日任務", key="regen_plan"):

@@ -53,11 +53,14 @@ def render(fixture_repo, task_repo, demo_date) -> None:
 
             if st.button("切換到這位業務", key=f"switch-{rep_id}"):
                 # 跟 today_tasks.py 的「開啟詳情」同一套跳轉模式：不能在這裡直接改
-                # st.session_state["mission_nav"]，那個 key 綁定的 radio widget
-                # 這一輪已經跑過了，改用 nav_redirect 中繼旗標讓 mission_app.py
-                # 在建立 radio 之前套用。同時複用 today_tasks.py 既有的業務／
-                # 可用分鐘 session_state key，不另外發明一組。
+                # st.session_state["mission_nav"]／帳號切換 widget 的 session_state，
+                # 那兩個 widget 這一輪都已經跑過了，改用 account_redirect／
+                # nav_redirect 中繼旗標讓 mission_app.py 在建立 widget 之前套用。
+                # 主管視角本來就是「只能看、只能導覽過去，不能越過業務直接操作」
+                # （P1_MANAGER_OVERVIEW_STATEMENT.md 明確排除事項），所以這裡是把
+                # 帳號整個切成該業務身份，而不是主管身份留著、只是換頁看而已。
                 st.session_state["selected_rep_id"] = rep_id
                 st.session_state["selected_available_minutes"] = available_minutes
+                st.session_state["account_redirect"] = rep_id
                 st.session_state["nav_redirect"] = "今日任務"
                 st.rerun()
