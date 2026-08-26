@@ -20,8 +20,11 @@ STATUS_LABELS = {
     "completed": "已完成", "not_completed": "未完成", "cancelled": "已取消",
 }
 
-_ACCEPTED_STATUSES = (TaskStatus.ACCEPTED, TaskStatus.MODIFIED)
-_DONE_STATUSES = (TaskStatus.COMPLETED, TaskStatus.NOT_COMPLETED, TaskStatus.CANCELLED)
+_ACCEPTED_STATUSES = (TaskStatus.ACCEPTED, TaskStatus.MODIFIED, TaskStatus.SCHEDULED)
+_DONE_STATUSES = (
+    TaskStatus.COMPLETED, TaskStatus.NOT_COMPLETED, TaskStatus.CANCELLED,
+    TaskStatus.REJECTED, TaskStatus.DEFERRED,
+)
 
 
 def _export_csv(tasks) -> bytes:
@@ -40,21 +43,40 @@ def _export_csv(tasks) -> bytes:
 def render(fixture_repo, task_repo, demo_date) -> None:
     reps = fixture_repo.get_reps()
     rep_names = {r["rep_id"]: r["rep_name"] for r in reps}
+
+    # Streamlit 有一個容易踩到的坑：widget 綁定的 session_state（用 key= 建立的那種），
+    # 只要那個 widget 在某一輪完全沒被渲染到（例如使用者切去「行程」頁，
+    # today_tasks.render() 整個沒執行），Streamlit 事後可能把它的 session_state 清掉；
+    # 回到這頁時 widget 會用自己的內建預設值重開（selectbox 用第一個選項、number_input
+    # 用 min_value），完全蓋掉使用者原本選的東西——不是「換業務才重置」這種可預期的行為，
+    # 是單純換頁就會消失。用下面這組非 widget 綁定的鏡像 key（本來就為了跨頁溝通而存在）
+    # 在 widget 狀態不見的時候把它復原回來，兩個 widget（業務選擇、可用分鐘）都要防。
+    rep_widget_key = "today_tasks_rep_id_widget"
+    if rep_widget_key not in st.session_state and "selected_rep_id" in st.session_state:
+        st.session_state[rep_widget_key] = st.session_state["selected_rep_id"]
     rep_id = st.selectbox(
         "選擇業務", options=list(rep_names.keys()), format_func=lambda r: f"{rep_names[r]}（{r}）",
-        key="today_tasks_rep_id_widget",
+        key=rep_widget_key,
     )
     st.caption(f"Demo 日期：{demo_date}（合成資料情境，非即時資料）")
 
-    default_minutes = next((int(r["daily_available_minutes"]) for r in reps if r["rep_id"] == rep_id), 240)
+    # 這裡也曾經每次都傳 value=default_minutes，結果使用者調整過的分鐘數下一輪就被蓋回
+    # 預設值——st.number_input 只要同時給 key 又給 value，每輪都會用 value 蓋掉使用者輸入。
+    # 現在只在「換了業務」時才重置成新業務自己的預設分鐘數；同一位業務、widget 狀態
+    # 因為換頁被清掉時，用 selected_available_minutes 鏡像復原，不會掉回 min_value(0)。
+    minutes_key = "today_tasks_available_minutes_widget"
+    minutes_for_rep_key = "today_tasks_available_minutes_for_rep"
+    if st.session_state.get(minutes_for_rep_key) != rep_id:
+        default_minutes = next((int(r["daily_available_minutes"]) for r in reps if r["rep_id"] == rep_id), 240)
+        st.session_state[minutes_key] = default_minutes
+        st.session_state[minutes_for_rep_key] = rep_id
+    elif minutes_key not in st.session_state and "selected_available_minutes" in st.session_state:
+        st.session_state[minutes_key] = st.session_state["selected_available_minutes"]
     available_minutes = st.number_input(
-        "今日可用彈性分鐘", min_value=0, max_value=600, value=default_minutes, step=10,
-        key="today_tasks_available_minutes_widget",
+        "今日可用彈性分鐘", min_value=0, max_value=600, step=10, key=minutes_key,
     )
-    # 用一組獨立、非 widget 綁定的 key 保存目前選擇，行程頁／結果回報頁靠這個取值。
-    # widget 綁定的 key 只有在該 widget 這一輪真的被渲染時才保證讀得到，換頁到其他分支
-    # （itinerary.py／outcomes.py 那個 elif 分支）today_tasks.render() 根本沒執行，
-    # 直接讀 widget key 會拿到 None，這裡已經踩過這個坑。
+    # 這組是給行程頁／結果回報頁跨頁讀取用的鏡像（本來就存在），現在也兼職拿來
+    # 復原上面兩個 widget 被 Streamlit 意外清掉的狀態。
     st.session_state["selected_rep_id"] = rep_id
     st.session_state["selected_available_minutes"] = available_minutes
 
@@ -90,8 +112,12 @@ def render(fixture_repo, task_repo, demo_date) -> None:
         st.caption("今日沒有固定預約。")
 
     tasks = plan.candidate_tasks
+    # 四個數字要能涵蓋 Task 狀態機的全部 9 種狀態、加起來剛好等於候選總數，
+    # 不能有任何狀態「消失」在摘要外——之前「候選」「需確認」重複算同一個狀態，
+    # 且 scheduled/deferred/rejected 三種狀態完全沒被任何一欄計入，會讓「已排入行程」
+    # 或「已延後/拒絕」的任務憑空從摘要消失，數字對不上總數，看起來像 bug。
     counts = {
-        "候選": sum(1 for t in tasks if t.status == TaskStatus.CANDIDATE),
+        "候選": len(tasks),
         "需確認": sum(1 for t in tasks if t.status == TaskStatus.CANDIDATE),
         "已採納": sum(1 for t in tasks if t.status in _ACCEPTED_STATUSES),
         "已完成": sum(1 for t in tasks if t.status in _DONE_STATUSES),

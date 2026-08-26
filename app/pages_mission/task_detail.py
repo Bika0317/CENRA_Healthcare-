@@ -106,7 +106,9 @@ def render(task_repo, demo_date: date) -> None:
         decision = ReviewDecision.ACCEPT
     elif decision_label == "修改後採納":
         decision = ReviewDecision.MODIFY
-        modified_objective = st.text_input("修改後的任務目標（留空表示不改）", value="", key=f"mobj-{task_id}") or None
+        # 不要傳 value=""：text_input 同時給 key 又給 value 的話，每次 rerun（例如底下
+        # 改執行方式的 radio 一動）都會被 value 蓋回空字串，使用者剛打的字會憑空消失。
+        modified_objective = st.text_input("修改後的任務目標（留空表示不改）", key=f"mobj-{task_id}") or None
         new_mode_label = st.radio(
             "修改後的執行方式", ["不變", "改成電話", "改成實訪"], horizontal=True, key=f"mmode-{task_id}",
         )
