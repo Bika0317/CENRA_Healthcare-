@@ -6,6 +6,11 @@
 將診所通路業務的「攻（新客開發）／守（流失挽回）／增（成長機會）」候選任務統一排序，
 交給業務員審核（採納／修改／延後／拒絕），排成電話與實訪行程，完成後把結果寫回，形成閉環。
 
+## 線上展示
+
+- **v2｜CENRA Mission（現行版本）**：https://cenra-healthcare-dev.streamlit.app/
+- v1｜精準打擊 Dashboard（上一版提交，保留供對照）：https://cenra-healthcare-dashboard.streamlit.app/
+
 ## Competition P0 功能範圍
 
 - 三類任務引擎（攻／守／增），依規則從合成事件資料生成、附證據，不是黑箱模型。
@@ -101,7 +106,7 @@ API。地圖上的點位順序是簡化的 nearest-neighbor 示意，不是即�
 仍可用 `streamlit run app/dashboard.py` 獨立執行。對應的說明文件搬到 `docs/legacy_v1/`。
 
 舊版線上展示（Streamlit Community Cloud，跑的是 `app/dashboard.py`，不是 CENRA Mission）：
-https://esxawprwq7kwnvghmr8mbe.streamlit.app/
+https://cenra-healthcare-dashboard.streamlit.app/
 
 ## 已知限制
 
