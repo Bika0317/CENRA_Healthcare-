@@ -136,8 +136,12 @@ def render(fixture_repo, task_repo, demo_date) -> None:
     label_to_type = {"攻": TaskType.ATTACK, "守": TaskType.DEFEND, "增": TaskType.GROW}
     filtered = tasks if type_filter == "全部" else [t for t in tasks if t.task_type == label_to_type[type_filter]]
 
-    st.markdown("#### 建議選取（依任務價值分數排序）")
+    st.markdown("#### 建議選取（⭐建議優先置頂，其餘依任務價值分數排序）")
     suggested_ids = {t.task_id for t in plan.suggested_tasks}
+    # tasks 原本已經是 value_score DESC（task_repository.py 的 SQL ORDER BY），
+    # Python 的 sort 是 stable sort，只用「是否為⭐建議」當 key 重排，兩個群組
+    # 內部彼此的相對順序（分數高低）不會被打亂，只是把⭐建議整組提到最前面。
+    filtered = sorted(filtered, key=lambda t: t.task_id not in suggested_ids)
 
     for t in filtered:
         with st.container(border=True):
