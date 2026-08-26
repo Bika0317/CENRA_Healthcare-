@@ -101,48 +101,73 @@ def render(fixture_repo, task_repo, demo_date) -> None:
     # 候選時，地圖整個不見——這是使用者實測回報的落差：明明有固定預約，卻看不到地圖。
     fixed_points = [ap for ap in plan.fixed_appointments if ap.lat is not None and ap.lon is not None]
     ordered_tasks = [visit_tasks[tid] for tid in order]
+    has_home_location = rep.get("home_lat") is not None and rep.get("home_lon") is not None
 
-    if ordered_tasks or fixed_points:
+    if ordered_tasks or fixed_points or has_home_location:
         # plotly 從 6.x 某個版本開始把 go.Scattermapbox／layout.mapbox 這整組
         # Mapbox-GL 底的舊 API 標成 deprecated、後續版本直接砍掉（存取時丟
         # AttributeError），改用不需要 Mapbox token、MapLibre 底的 go.Scattermap／
         # layout.map 取代。requirements.txt 沒鎖 plotly 版本，Streamlit Cloud
         # 部署時裝到的版本比本機新，就是舊 API 已經被砍掉的那個版本，本機沒鎖版本
         # 卻沒有立刻踩到，是因為本機剛好還在兩者都保留的版本區間。
+        # 使用者反饋：只要標點位就好，不用畫連線（之前 mode 裡的 "lines" 是在暗示
+        # 建議路線，容易被誤會成導航路徑）；另外要標業務目前所在位置。資料裡沒有
+        # 真實街道地址欄位（accounts.csv／prospects.csv 只有 region 大分類 + 經緯度，
+        # Task／FixedAppointment 也只帶 lat/lon），所以滑鼠移上去顯示的是座標，
+        # 不是假造一個看起來像地址的字串。
+        home_lat, home_lon = rep.get("home_lat"), rep.get("home_lon")
         fig = go.Figure()
+        if home_lat is not None and home_lon is not None:
+            fig.add_trace(go.Scattermap(
+                lat=[home_lat], lon=[home_lon], mode="markers+text",
+                text=["駐地"], textposition="top center",
+                marker=dict(size=18, color="#5B4FBF", symbol="circle"),
+                hovertext=[f"{rep['rep_name']}目前所在位置　座標：{home_lat:.4f}, {home_lon:.4f}"],
+                hoverinfo="text", name="業務目前位置",
+            ))
         if fixed_points:
             fig.add_trace(go.Scattermap(
                 lat=[ap.lat for ap in fixed_points], lon=[ap.lon for ap in fixed_points],
                 mode="markers+text",
                 text=[ap.start_time for ap in fixed_points], textposition="top center",
                 marker=dict(size=16, color="#2C5AA0", symbol="circle"),
-                hovertext=[f"固定預約　{ap.start_time}　{ap.target_name}　{ap.purpose}" for ap in fixed_points],
+                hovertext=[
+                    f"固定預約　{ap.start_time}　{ap.target_name}　{ap.purpose}"
+                    f"　座標：{ap.lat:.4f}, {ap.lon:.4f}"
+                    for ap in fixed_points
+                ],
                 hoverinfo="text", name="固定預約",
             ))
         if ordered_tasks:
             fig.add_trace(go.Scattermap(
                 lat=[t.lat for t in ordered_tasks], lon=[t.lon for t in ordered_tasks],
-                mode="markers+lines+text",
+                mode="markers+text",
                 text=[str(i + 1) for i in range(len(ordered_tasks))], textposition="top center",
                 marker=dict(size=16, color="#D85A30"),
-                line=dict(width=2, color="#888"),
                 hovertext=[
                     f"{i + 1}. {t.target_name}（{TASK_TYPE_LABELS[t.task_type.value]}）"
                     + (f" · {scheduled_start_by_id.get(t.task_id)}" if scheduled_start_by_id.get(t.task_id) else "")
+                    + f"　座標：{t.lat:.4f}, {t.lon:.4f}"
                     for i, t in enumerate(ordered_tasks)
                 ],
                 hoverinfo="text", name="已採納實訪任務",
             ))
         all_lats = [ap.lat for ap in fixed_points] + [t.lat for t in ordered_tasks]
         all_lons = [ap.lon for ap in fixed_points] + [t.lon for t in ordered_tasks]
+        if home_lat is not None and home_lon is not None:
+            all_lats.append(home_lat)
+            all_lons.append(home_lon)
         fig.update_layout(
             map_style="open-street-map", height=420,
             map_center={"lat": sum(all_lats) / len(all_lats), "lon": sum(all_lons) / len(all_lons)},
-            map_zoom=9.5, margin={"r": 0, "t": 0, "l": 0, "b": 0}, showlegend=bool(fixed_points and ordered_tasks),
+            map_zoom=9.5, margin={"r": 0, "t": 0, "l": 0, "b": 0}, showlegend=True,
         )
         st.plotly_chart(fig, use_container_width=True)
 
-    st.caption("拜訪點位與建議順序示意，非即時導航或最佳路線。")
+    # "拜訪點位與建議順序示意" 是 SPEC §15.2 固定允許語句（見
+    # domain/reason_codes.py::ALLOWED_PHRASES），guardrail 測試要求逐字出現，
+    # 不能因為拿掉連線就跟著改寫掉這句話。
+    st.caption("拜訪點位與建議順序示意，非即時導航或最佳路線；地圖只標點位，不畫路線連線。")
 
     committed = [t for t in plan.candidate_tasks if t.status in _COMMITTED_STATUSES]
     fixed_minutes = sum(ap.duration_minutes for ap in plan.fixed_appointments)
