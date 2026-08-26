@@ -103,9 +103,15 @@ def render(fixture_repo, task_repo, demo_date) -> None:
     ordered_tasks = [visit_tasks[tid] for tid in order]
 
     if ordered_tasks or fixed_points:
+        # plotly 從 6.x 某個版本開始把 go.Scattermapbox／layout.mapbox 這整組
+        # Mapbox-GL 底的舊 API 標成 deprecated、後續版本直接砍掉（存取時丟
+        # AttributeError），改用不需要 Mapbox token、MapLibre 底的 go.Scattermap／
+        # layout.map 取代。requirements.txt 沒鎖 plotly 版本，Streamlit Cloud
+        # 部署時裝到的版本比本機新，就是舊 API 已經被砍掉的那個版本，本機沒鎖版本
+        # 卻沒有立刻踩到，是因為本機剛好還在兩者都保留的版本區間。
         fig = go.Figure()
         if fixed_points:
-            fig.add_trace(go.Scattermapbox(
+            fig.add_trace(go.Scattermap(
                 lat=[ap.lat for ap in fixed_points], lon=[ap.lon for ap in fixed_points],
                 mode="markers+text",
                 text=[ap.start_time for ap in fixed_points], textposition="top center",
@@ -114,7 +120,7 @@ def render(fixture_repo, task_repo, demo_date) -> None:
                 hoverinfo="text", name="固定預約",
             ))
         if ordered_tasks:
-            fig.add_trace(go.Scattermapbox(
+            fig.add_trace(go.Scattermap(
                 lat=[t.lat for t in ordered_tasks], lon=[t.lon for t in ordered_tasks],
                 mode="markers+lines+text",
                 text=[str(i + 1) for i in range(len(ordered_tasks))], textposition="top center",
@@ -130,9 +136,9 @@ def render(fixture_repo, task_repo, demo_date) -> None:
         all_lats = [ap.lat for ap in fixed_points] + [t.lat for t in ordered_tasks]
         all_lons = [ap.lon for ap in fixed_points] + [t.lon for t in ordered_tasks]
         fig.update_layout(
-            mapbox_style="open-street-map", height=420,
-            mapbox_center={"lat": sum(all_lats) / len(all_lats), "lon": sum(all_lons) / len(all_lons)},
-            mapbox_zoom=9.5, margin={"r": 0, "t": 0, "l": 0, "b": 0}, showlegend=bool(fixed_points and ordered_tasks),
+            map_style="open-street-map", height=420,
+            map_center={"lat": sum(all_lats) / len(all_lats), "lon": sum(all_lons) / len(all_lons)},
+            map_zoom=9.5, margin={"r": 0, "t": 0, "l": 0, "b": 0}, showlegend=bool(fixed_points and ordered_tasks),
         )
         st.plotly_chart(fig, use_container_width=True)
 

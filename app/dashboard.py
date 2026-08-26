@@ -108,13 +108,17 @@ with tab_overview:
     st.plotly_chart(legend_below(fig), use_container_width=True)
 
     st.subheader("客戶地理分佈（風險燈號）")
-    map_fig = px.scatter_mapbox(
+    # plotly 6.x 後續版本砍掉了 Mapbox-GL 底的 scatter_mapbox/Scattermapbox（存取時
+    # AttributeError），改用不需要 token、MapLibre 底的 scatter_map/Scattermap；
+    # requirements.txt 沒鎖版本，部署環境裝到新版就會直接壞掉（已在 mission_app 那邊
+    # 遇到並修過，這裡是同一個坑）。
+    map_fig = px.scatter_map(
         scored_df, lat="lat", lon="lon", color="risk_flag", size="base_monthly_value",
         hover_data=["customer_name", "region", "channel", "purchase_proba"],
         color_discrete_map=RISK_COLOR_MAP, zoom=6.3, height=480,
         center={"lat": 23.9, "lon": 121.0},
     )
-    map_fig.update_layout(mapbox_style="open-street-map", margin={"r": 0, "t": 0, "l": 0, "b": 0})
+    map_fig.update_layout(map_style="open-street-map", margin={"r": 0, "t": 0, "l": 0, "b": 0})
     map_fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0))
     st.plotly_chart(map_fig, use_container_width=True)
     st.caption("紅點為疑似競品入侵的高風險客戶，可直接看出風險是否集中在特定區域，作為人力調度參考。")
@@ -176,7 +180,7 @@ with tab_rep:
     route_df = my_customers.head(route_n).reset_index(drop=True)
     if not route_df.empty:
         route_df["順序"] = route_df.index + 1
-        route_fig = go.Figure(go.Scattermapbox(
+        route_fig = go.Figure(go.Scattermap(
             lat=route_df["lat"], lon=route_df["lon"], mode="markers+lines+text",
             text=route_df["順序"].astype(str), textposition="top center",
             marker=dict(size=16, color=route_df["risk_flag"].map(RISK_COLOR_MAP)),
@@ -185,9 +189,9 @@ with tab_rep:
             hoverinfo="text",
         ))
         route_fig.update_layout(
-            mapbox_style="open-street-map", height=440,
-            mapbox_center={"lat": route_df["lat"].mean(), "lon": route_df["lon"].mean()},
-            mapbox_zoom=9.5, margin={"r": 0, "t": 0, "l": 0, "b": 0}, showlegend=False,
+            map_style="open-street-map", height=440,
+            map_center={"lat": route_df["lat"].mean(), "lon": route_df["lon"].mean()},
+            map_zoom=9.5, margin={"r": 0, "t": 0, "l": 0, "b": 0}, showlegend=False,
         )
         st.plotly_chart(route_fig, use_container_width=True)
         st.caption("數字為建議拜訪順序（直線示意，非實際路網路徑），可作為排路線的起點。")
