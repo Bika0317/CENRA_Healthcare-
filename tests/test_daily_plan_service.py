@@ -1,7 +1,7 @@
 """覆蓋 SPEC AC-01/AC-06 與 daily_plan_service 的 idempotent／容量／點位順序行為。"""
 from __future__ import annotations
 
-from domain.models import ActionMode, TaskType
+from domain.models import ActionMode, ExecutionStatus, OutcomeType, ReviewDecision, TaskType
 from services.daily_plan_service import build_daily_plan
 
 
@@ -49,3 +49,31 @@ def test_low_available_minutes_still_produces_valid_plan(demo_date, fixture_repo
     total = sum(t.estimated_minutes for t in plan.suggested_tasks)
     fixed_minutes = sum(ap.duration_minutes for ap in plan.fixed_appointments)
     assert total <= max(60 - fixed_minutes, 0)
+
+
+def test_completing_a_suggested_task_shrinks_suggested_count_without_backfill(
+    demo_date, fixture_repo, task_repo,
+):
+    """
+    使用者實測回報的行為：建議 3～4 張、完成其中 1 張後，剩下的建議張數應該
+    跟著減少，不該因為完成的任務讓出分鐘數，就被 allocate_daily_capacity()
+    遞補一張全新候選進來、讓總張數維持不變甚至變多。
+    """
+    plan = build_daily_plan("L100", demo_date, 240, fixture_repo, task_repo)
+    before_count = len(plan.suggested_tasks)
+    assert before_count >= 1
+
+    t = plan.suggested_tasks[0]
+    task_repo.apply_review(
+        t.task_id, ReviewDecision.ACCEPT, modified_objective=None, modified_action_mode=None,
+        reason_code="", reason_note=None, deferred_to=None, actor_rep_id="L100",
+    )
+    task_repo.mark_scheduled(t.task_id)
+    task_repo.apply_outcome(
+        t.task_id, ExecutionStatus.COMPLETED, OutcomeType.DEMAND_CONFIRMED,
+        note=None, next_step=None, next_date=None, actor_rep_id="L100",
+    )
+
+    plan2 = build_daily_plan("L100", demo_date, 240, fixture_repo, task_repo)
+    assert len(plan2.suggested_tasks) == before_count - 1
+    assert t.task_id not in {task.task_id for task in plan2.suggested_tasks}

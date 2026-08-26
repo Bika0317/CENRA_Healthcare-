@@ -11,6 +11,14 @@ from engines import attack, defend, grow
 from services.scheduling import allocate_daily_capacity, build_visit_sequence
 from services.scoring import score_candidates
 
+# 已經被業務決定「今天要花這些分鐘」的狀態：即使任務本身已完成/取消，時間也已經花掉了，
+# 不該被容量分配演算法當成「還沒用」而遞補別的候選進來。REJECTED／DEFERRED 不在這裡，
+# 因為那代表業務決定「今天不做」，分鐘數本來就該釋出。
+_COMMITTED_STATUSES = (
+    TaskStatus.ACCEPTED, TaskStatus.MODIFIED, TaskStatus.SCHEDULED,
+    TaskStatus.COMPLETED, TaskStatus.NOT_COMPLETED, TaskStatus.CANCELLED,
+)
+
 
 def build_daily_plan(rep_id: str, plan_date: date, available_minutes: int,
                       fixture_repo, task_repo) -> DailyPlan:
@@ -40,10 +48,20 @@ def build_daily_plan(rep_id: str, plan_date: date, available_minutes: int,
     candidate_tasks = task_repo.get_candidate_tasks(rep_id, plan_date)
     still_pending = [t for t in candidate_tasks if t.status == TaskStatus.CANDIDATE]
 
+    # 已經被業務實際「排進今天」的任務（採納/修改採納/排入行程/完成/未完成/取消）就算離開
+    # candidate 狀態，佔用的分鐘數也不該憑空釋出——不然使用者完成一張建議任務後，
+    # allocate_daily_capacity() 會把它讓出來的容量塞給另一張全新候選遞補，讓「⭐建議」
+    # 清單張數維持不變甚至變多，而不是像使用者預期的那樣單純減少。
+    # 拒絕／延後則是業務明確決定「今天不做」，這份分鐘數才應該真的釋出讓別的候選遞補。
+    committed_minutes = sum(
+        t.estimated_minutes for t in candidate_tasks if t.status in _COMMITTED_STATUSES
+    )
+    effective_available_minutes = max(available_minutes - committed_minutes, 0)
+
     fixed_appointments = fixture_repo.get_fixed_appointments(rep_id, plan_date)
 
     suggested_tasks, remaining_minutes = allocate_daily_capacity(
-        still_pending, fixed_appointments, available_minutes
+        still_pending, fixed_appointments, effective_available_minutes
     )
 
     visit_sequence = build_visit_sequence(
