@@ -85,26 +85,43 @@ def render(fixture_repo, task_repo, demo_date) -> None:
                 "（固定預約切出來的空檔都不夠），建議改電話或延後。"
             )
 
-    if order:
-        ordered_tasks = [visit_tasks[tid] for tid in order]
-        fig = go.Figure(go.Scattermapbox(
-            lat=[t.lat for t in ordered_tasks], lon=[t.lon for t in ordered_tasks],
-            mode="markers+lines+text",
-            text=[str(i + 1) for i in range(len(ordered_tasks))], textposition="top center",
-            marker=dict(size=16, color="#D85A30"),
-            line=dict(width=2, color="#888"),
-            hovertext=[
-                f"{i + 1}. {t.target_name}（{TASK_TYPE_LABELS[t.task_type.value]}）"
-                + (f" · {scheduled_start_by_id.get(t.task_id)}" if scheduled_start_by_id.get(t.task_id) else "")
-                for i, t in enumerate(ordered_tasks)
-            ],
-            hoverinfo="text",
-        ))
+    # 固定預約本身也是今天真的要去的實訪點位（有座標就該畫在地圖上），不能因為
+    # 「地圖只畫已採納候選任務」這條舊邏輯，讓使用者只有固定預約、還沒採納任何實訪
+    # 候選時，地圖整個不見——這是使用者實測回報的落差：明明有固定預約，卻看不到地圖。
+    fixed_points = [ap for ap in plan.fixed_appointments if ap.lat is not None and ap.lon is not None]
+    ordered_tasks = [visit_tasks[tid] for tid in order]
+
+    if ordered_tasks or fixed_points:
+        fig = go.Figure()
+        if fixed_points:
+            fig.add_trace(go.Scattermapbox(
+                lat=[ap.lat for ap in fixed_points], lon=[ap.lon for ap in fixed_points],
+                mode="markers+text",
+                text=[ap.start_time for ap in fixed_points], textposition="top center",
+                marker=dict(size=16, color="#2C5AA0", symbol="circle"),
+                hovertext=[f"固定預約　{ap.start_time}　{ap.target_name}　{ap.purpose}" for ap in fixed_points],
+                hoverinfo="text", name="固定預約",
+            ))
+        if ordered_tasks:
+            fig.add_trace(go.Scattermapbox(
+                lat=[t.lat for t in ordered_tasks], lon=[t.lon for t in ordered_tasks],
+                mode="markers+lines+text",
+                text=[str(i + 1) for i in range(len(ordered_tasks))], textposition="top center",
+                marker=dict(size=16, color="#D85A30"),
+                line=dict(width=2, color="#888"),
+                hovertext=[
+                    f"{i + 1}. {t.target_name}（{TASK_TYPE_LABELS[t.task_type.value]}）"
+                    + (f" · {scheduled_start_by_id.get(t.task_id)}" if scheduled_start_by_id.get(t.task_id) else "")
+                    for i, t in enumerate(ordered_tasks)
+                ],
+                hoverinfo="text", name="已採納實訪任務",
+            ))
+        all_lats = [ap.lat for ap in fixed_points] + [t.lat for t in ordered_tasks]
+        all_lons = [ap.lon for ap in fixed_points] + [t.lon for t in ordered_tasks]
         fig.update_layout(
             mapbox_style="open-street-map", height=420,
-            mapbox_center={"lat": sum(t.lat for t in ordered_tasks) / len(ordered_tasks),
-                            "lon": sum(t.lon for t in ordered_tasks) / len(ordered_tasks)},
-            mapbox_zoom=9.5, margin={"r": 0, "t": 0, "l": 0, "b": 0}, showlegend=False,
+            mapbox_center={"lat": sum(all_lats) / len(all_lats), "lon": sum(all_lons) / len(all_lons)},
+            mapbox_zoom=9.5, margin={"r": 0, "t": 0, "l": 0, "b": 0}, showlegend=bool(fixed_points and ordered_tasks),
         )
         st.plotly_chart(fig, use_container_width=True)
 
