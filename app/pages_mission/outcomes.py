@@ -42,7 +42,9 @@ def render(task_repo, rep_id: str, plan_date: date) -> None:
     if not tasks:
         st.caption("目前沒有已排入行程、尚待回報結果的任務。")
     for task in tasks:
-        with st.expander(f"[{TASK_TYPE_LABELS[task.task_type.value]}] {task.target_name} · {task.title}"):
+        # task.title 已經是「{類型描述}：{診所名稱}」，前面再加 task.target_name
+        # 會讓診所名稱重複出現兩次（同一個坑，today_tasks.py 的任務卡也踩過）。
+        with st.expander(f"[{TASK_TYPE_LABELS[task.task_type.value]}] {task.title}"):
             status_label = st.radio(
                 "執行狀態", ["已完成", "未完成", "已取消"], horizontal=True, key=f"exec-{task.task_id}",
             )

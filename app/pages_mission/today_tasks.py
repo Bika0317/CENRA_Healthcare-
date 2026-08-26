@@ -143,7 +143,10 @@ def render(fixture_repo, task_repo, demo_date) -> None:
         with st.container(border=True):
             top = st.columns([1, 5, 2])
             top[0].badge(TASK_TYPE_LABELS[t.task_type.value], color=TASK_TYPE_BADGE_COLOR[t.task_type.value])
-            top[1].markdown(f"**{t.target_name}**　{t.title}")
+            # t.title 本身就是「{類型描述}：{診所名稱}」（例如「開發任務：青禾診所」），
+            # 前面再放一次 t.target_name 會讓診所名稱在同一行連續出現兩次
+            # （「青禾診所　開發任務：青禾診所」），看起來像重複渲染的排版錯誤。
+            top[1].markdown(f"**{t.title}**")
             top[2].markdown(f"分數 **{t.value_score:.1f}**" + ("　⭐建議" if t.task_id in suggested_ids else ""))
             st.caption(f"為什麼現在：{t.why_now}")
             st.caption(f"建議目標：{t.objective}")
