@@ -263,6 +263,80 @@ def build_other_rep_data(rep_id: str, region: str, n_accounts=9, n_prospects=4):
             "explicit_interest": bool(RNG.random() < 0.3), "lat": lat, "lon": lon,
         })
 
+    # 補強：純隨機資料讓「增」任務的三個觸發條件（補貨週期/品項缺口/明確需求）結構性地
+    # 永遠不可能命中（訂單日期完全隨機無週期性、品項獨立抽樣幾乎必湊滿 3 種、summary_tag
+    # 候選集合裡根本沒有 demand/product_interest）。這裡用固定值（不呼叫 RNG）補兩個結構化
+    # 帳戶到既有隨機資料之後，不影響前面既有的 RNG 呼叫序列，L100 與既有隨機資料逐位元組不變。
+    if rep_id == "L101":
+        # 補貨週期 + 品項缺口 + 缺座標情境（比照 L100 的 A003 手法）
+        grow_aid = f"{rep_id}_A_GROW1"
+        accounts.append({
+            "account_id": grow_aid, "name": f"{region}補貨診所", "specialty": "小兒科",
+            "region": region, "status": "active", "rep_id": rep_id, "lat": "", "lon": "",
+            "value_band": "medium", "created_at": iso(HISTORY_START - timedelta(days=300)),
+            "updated_at": iso(DEMO_DATE - timedelta(days=1)),
+        })
+        interactions.append({
+            "interaction_id": f"I_{grow_aid}_1", "target_type": "account", "target_id": grow_aid,
+            "rep_id": rep_id, "occurred_at": iso(DEMO_DATE - timedelta(days=20)), "channel": "visit",
+            "summary_tag": "product_demo", "note": "例行拜訪，關係正常", "next_step": "", "due_date": "",
+            "resolved": True, "competitor_mentioned": False,
+        })
+        for k in range(1, 7):
+            orders.append({
+                "order_id": f"O_{grow_aid}_{k}", "account_id": grow_aid, "rep_id": rep_id,
+                "order_date": iso(DEMO_DATE - timedelta(days=32 + (k - 1) * 30)),
+                "product_line": "OTC", "quantity": 10, "amount": 15000.0, "status": "completed",
+            })
+
+    if rep_id == "L102":
+        # 明確需求／產品興趣訊號情境
+        demand_aid = f"{rep_id}_A_GROW1"
+        lat, lon = jitter_latlon(region)
+        accounts.append({
+            "account_id": demand_aid, "name": f"{region}需求診所", "specialty": "內科",
+            "region": region, "status": "active", "rep_id": rep_id, "lat": lat, "lon": lon,
+            "value_band": "medium", "created_at": iso(HISTORY_START - timedelta(days=300)),
+            "updated_at": iso(DEMO_DATE - timedelta(days=1)),
+        })
+        # 三筆訂單都落在近 90 天內、且核心品項是最近一筆：避免被守引擎誤判成
+        # 「近 90 天營收/品項下滑」（前期窗口沒有任何訂單可比較，才不會被當成下滑）
+        # 或「核心品項停購」（比照 A003 踩過的同一類洩漏坑）。
+        for k, (days_ago, line) in enumerate([(75, "個人護理"), (45, "OTC"), (20, CORE_PRODUCT)], start=1):
+            orders.append({
+                "order_id": f"O_{demand_aid}_{k}", "account_id": demand_aid, "rep_id": rep_id,
+                "order_date": iso(DEMO_DATE - timedelta(days=days_ago)),
+                "product_line": line, "quantity": 8, "amount": 12000.0, "status": "completed",
+            })
+        interactions.append({
+            "interaction_id": f"I_{demand_aid}_1", "target_type": "account", "target_id": demand_aid,
+            "rep_id": rep_id, "occurred_at": iso(DEMO_DATE - timedelta(days=5)), "channel": "visit",
+            "summary_tag": "product_interest", "note": "醫師詢問新品項是否適合引進",
+            "next_step": "", "due_date": "", "resolved": False, "competitor_mentioned": False,
+        })
+
+        # 明確競品文字訊號情境（守任務，比照 L100 的 A005 手法）
+        competitor_aid = f"{rep_id}_A_COMPETITOR1"
+        lat, lon = jitter_latlon(region)
+        accounts.append({
+            "account_id": competitor_aid, "name": f"{region}競品診所", "specialty": "耳鼻喉科",
+            "region": region, "status": "active", "rep_id": rep_id, "lat": lat, "lon": lon,
+            "value_band": "high", "created_at": iso(HISTORY_START - timedelta(days=300)),
+            "updated_at": iso(DEMO_DATE - timedelta(days=1)),
+        })
+        for k in range(1, 6):
+            orders.append({
+                "order_id": f"O_{competitor_aid}_{k}", "account_id": competitor_aid, "rep_id": rep_id,
+                "order_date": iso(DEMO_DATE - timedelta(days=200 - k * 20)),
+                "product_line": CORE_PRODUCT, "quantity": 10, "amount": 35000.0, "status": "completed",
+            })
+        interactions.append({
+            "interaction_id": f"I_{competitor_aid}_1", "target_type": "account", "target_id": competitor_aid,
+            "rep_id": rep_id, "occurred_at": iso(DEMO_DATE - timedelta(days=15)), "channel": "visit",
+            "summary_tag": "competitor", "note": "醫師提到另一家廠商業務頻繁來訪、報價更低",
+            "next_step": "", "due_date": "", "resolved": False, "competitor_mentioned": True,
+        })
+
     return accounts, prospects, interactions, orders, appointments
 
 
