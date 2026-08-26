@@ -23,6 +23,7 @@ STATUS_LABELS = {
     "completed": "已完成", "not_completed": "未完成", "cancelled": "已取消",
 }
 ACTION_MODE_LABELS = {"phone": "電話", "visit": "實訪"}
+DECISION_LABELS = {"accept": "採納", "modify": "修改後採納", "defer": "延後", "reject": "拒絕"}
 
 
 def _reason_options():
@@ -160,6 +161,6 @@ def _render_review_history(task_repo, task_id: str) -> None:
     st.markdown("#### 審核紀錄")
     for r in history:
         st.caption(
-            f"{r.created_at:%Y-%m-%d %H:%M} · {r.actor_rep_id} · {r.decision.value}"
+            f"{r.created_at:%Y-%m-%d %H:%M} · {r.actor_rep_id} · {DECISION_LABELS[r.decision.value]}"
             + (f" · 原因：{_reason_label(r.reason_code)}" if r.reason_code else "")
         )

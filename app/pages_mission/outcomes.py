@@ -26,6 +26,10 @@ EXECUTION_STATUS_LABELS = {
     ExecutionStatus.NOT_COMPLETED: "未完成",
     ExecutionStatus.CANCELLED: "已取消",
 }
+# task.status 是 TaskStatus，不是 ExecutionStatus，寫回結果後可能是這三種之一；
+# 直接印 task.status.value 會漏出英文 enum 原始值（"completed"/"not_completed"/
+# "cancelled"），在全中文介面裡看起來像沒翻譯完的殘留文字。
+TASK_STATUS_LABELS = {"completed": "已完成", "not_completed": "未完成", "cancelled": "已取消"}
 
 
 def render(task_repo, rep_id: str, plan_date: date) -> None:
@@ -81,12 +85,13 @@ def render(task_repo, rep_id: str, plan_date: date) -> None:
                 except ValidationError as exc:
                     st.error(f"無法送出：{exc}")
                 else:
-                    st.success(f"已更新，完成時間：{updated.status.value}")
+                    st.success(f"已更新，目前狀態：{TASK_STATUS_LABELS[updated.status.value]}")
                     st.rerun()
 
     if completed:
         with st.expander(f"已完成／已結案（{len(completed)}）", expanded=False):
             for task in completed:
                 outcome = task_repo.get_outcome(task.task_id)
-                st.markdown(f"- [{TASK_TYPE_LABELS[task.task_type.value]}] {task.target_name}：{task.status.value}"
+                st.markdown(f"- [{TASK_TYPE_LABELS[task.task_type.value]}] {task.target_name}："
+                             f"{TASK_STATUS_LABELS[task.status.value]}"
                              + (f" · {outcome.completed_at:%Y-%m-%d %H:%M}" if outcome else ""))
