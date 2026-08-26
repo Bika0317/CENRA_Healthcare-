@@ -13,7 +13,18 @@ from services.daily_plan_service import build_daily_plan
 from services.scheduling import build_visit_sequence
 
 TASK_TYPE_LABELS = {"attack": "攻", "defend": "守", "grow": "增"}
+# 「電話清單」「實訪清單」只列還沒執行完的已採納任務（給業務今天還要做的事），
+# 所以維持只含 ACCEPTED/MODIFIED/SCHEDULED，COMPLETED 等狀態的任務本來就該從
+# 這兩份清單消失，這裡不用改。
 _ACCEPTED_STATUSES = (TaskStatus.ACCEPTED, TaskStatus.MODIFIED, TaskStatus.SCHEDULED)
+# 但「今日總使用分鐘／剩餘分鐘」是在算「今天分鐘總量被用掉多少」，跟
+# daily_plan_service.py 的 _COMMITTED_STATUSES 邏輯必須一致：已完成/未完成/取消
+# 的任務時間也已經真的花掉了，不能因為它從上面兩份清單消失，就連帶從這個分鐘數
+# 計算裡消失，不然這裡跟「今日任務」頁 plan.remaining_minutes 顯示的數字會對不上
+# （這兩個頁面理論上該是同一件事的兩種呈現方式）。
+_COMMITTED_STATUSES = _ACCEPTED_STATUSES + (
+    TaskStatus.COMPLETED, TaskStatus.NOT_COMPLETED, TaskStatus.CANCELLED,
+)
 
 
 def render(fixture_repo, task_repo, demo_date) -> None:
@@ -127,7 +138,8 @@ def render(fixture_repo, task_repo, demo_date) -> None:
 
     st.caption("拜訪點位與建議順序示意，非即時導航或最佳路線。")
 
+    committed = [t for t in plan.candidate_tasks if t.status in _COMMITTED_STATUSES]
     fixed_minutes = sum(ap.duration_minutes for ap in plan.fixed_appointments)
-    used_minutes = fixed_minutes + sum(t.estimated_minutes for t in accepted)
+    used_minutes = fixed_minutes + sum(t.estimated_minutes for t in committed)
     st.metric("今日總使用分鐘", used_minutes)
     st.metric("剩餘分鐘", max(plan.available_minutes - used_minutes, 0))

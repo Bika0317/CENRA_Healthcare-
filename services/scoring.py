@@ -96,6 +96,13 @@ def score_candidates(candidates: list[Candidate], rep_id: str, task_date: date,
             evidences = list(candidate.evidences)
             for e in evidences:
                 e.task_id = task_id
+                # 引擎產生的 evidence_id 只有「帳戶＋規則代碼」（例如 EV-A008-defend-core），
+                # 沒有日期資訊；task_evidence.evidence_id 是全表 PRIMARY KEY，同一帳戶在
+                # 不同天觸發同一條規則就會撞到同一個 evidence_id，INSERT 直接 IntegrityError
+                # ——這在「延後任務隔天回到候選」這條路徑上幾乎必定發生（帳戶資料沒變，
+                # 隔天多半還是會再次觸發同一條規則）。task_id 本身已經把 rep/target/type/date
+                # 都編碼進去，拿它當 evidence_id 的前綴就能讓每次生成天然全域唯一。
+                e.evidence_id = f"{task_id}-{e.code}"
 
             tasks.append(Task(
                 task_id=task_id, generation_key=generation_key, generated_at=datetime.now(),
