@@ -9,6 +9,7 @@ import streamlit as st
 
 from domain.models import ExecutionStatus, OutcomeType, TaskStatus, ValidationError
 
+from services.followup_service import has_been_converted
 from services.outcome_service import submit_outcome
 
 TASK_TYPE_LABELS = {"attack": "攻", "defend": "守", "grow": "增"}
@@ -95,3 +96,26 @@ def render(task_repo, rep_id: str, plan_date: date) -> None:
                 st.markdown(f"- [{TASK_TYPE_LABELS[task.task_type.value]}] {task.target_name}："
                              f"{TASK_STATUS_LABELS[task.status.value]}"
                              + (f" · {outcome.completed_at:%Y-%m-%d %H:%M}" if outcome else ""))
+
+    st.divider()
+    st.markdown("### 待追蹤事項")
+    st.caption(
+        "任務回報結果時勾選「需要後續追蹤」填的下一步與預計日期，到期（或已過期）當天"
+        "會自動轉成一張新的候選任務，重新出現在「今日任務」頁，可以像其他候選任務一樣審核。"
+    )
+    followups = task_repo.get_all_followups(rep_id)
+    if not followups:
+        st.caption("目前沒有標記需要後續追蹤的事項。")
+    for original, outcome in followups:
+        days = (outcome.next_date - plan_date).days
+        if days < 0:
+            due_label = f"已逾期 {-days} 天"
+        elif days == 0:
+            due_label = "今天到期"
+        else:
+            due_label = f"還有 {days} 天"
+        converted_label = "・已轉為候選任務" if has_been_converted(task_repo, original.task_id) else ""
+        st.markdown(
+            f"- [{TASK_TYPE_LABELS[original.task_type.value]}] {original.target_name}"
+            f"　{outcome.next_step}　（{outcome.next_date}，{due_label}{converted_label}）"
+        )

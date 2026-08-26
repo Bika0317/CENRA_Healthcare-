@@ -8,6 +8,7 @@ from datetime import date
 
 from domain.models import DailyPlan, TaskStatus
 from engines import attack, defend, grow
+from services.followup_service import generate_followup_tasks
 from services.scheduling import allocate_daily_capacity, build_visit_sequence
 from services.scoring import score_candidates
 
@@ -24,11 +25,13 @@ def build_daily_plan(rep_id: str, plan_date: date, available_minutes: int,
                       fixture_repo, task_repo) -> DailyPlan:
     """
     0. 把過了 deferred_to 的延後任務轉回候選 -> 1. 三引擎各自產生新候選 -> 2. 統一評分
-    （含依業務駐地座標估算的交通成本懲罰）-> 3. 存入 task_repository（idempotent，
-    同 generation_key 不重複寫入）-> 4. 取回今天全部候選任務（含歷史已存在的）
-    -> 5. 固定預約 + 容量分配 + 三類最低配額 -> 6. 依固定預約切時段的 nearest-neighbor 點位順序。
+    （含依業務駐地座標估算的交通成本懲罰）-> 2.5 到期的後續追蹤事項轉成候選任務
+    -> 3. 存入 task_repository（idempotent，同 generation_key 不重複寫入）
+    -> 4. 取回今天全部候選任務（含歷史已存在的）-> 5. 固定預約 + 容量分配 + 三類最低配額
+    -> 6. 依固定預約切時段的 nearest-neighbor 點位順序。
     """
     task_repo.resurface_deferred_tasks(rep_id, plan_date)
+    task_repo.resurface_stale_followup_tasks(rep_id, plan_date)
 
     rep = fixture_repo.get_rep(rep_id)
     rep_home_lat, rep_home_lon = rep.get("home_lat"), rep.get("home_lon")
@@ -39,6 +42,10 @@ def build_daily_plan(rep_id: str, plan_date: date, available_minutes: int,
         + grow.generate_candidates(fixture_repo, rep_id, plan_date)
     )
     new_tasks = score_candidates(candidates, rep_id, plan_date, rep_home_lat, rep_home_lon)
+    # 後續追蹤不是引擎規則產生的候選，不進 score_candidates() 那套跨候選百分位計分
+    # （固定分數，見 services/followup_service.py），但一樣靠 generation_key 走同一套
+    # idempotent 寫入，到期後只會被轉成任務一次。
+    new_tasks = new_tasks + generate_followup_tasks(task_repo, rep_id, plan_date)
     if new_tasks:
         task_repo.save_tasks(new_tasks)
 

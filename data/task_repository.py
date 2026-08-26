@@ -134,6 +134,29 @@ class TaskRepository:
         ).fetchall()
         return [_row_to_task(r, self._load_evidences(r["task_id"])) for r in rows]
 
+    def get_all_followups(self, rep_id: str) -> list[tuple[Task, TaskOutcome]]:
+        """回傳這位業務所有「結果回報時勾了需要後續追蹤」的 (原任務, 結果) 配對，
+        不限日期（給待追蹤事項清單用，讓使用者看到還沒到期的也在排隊，不是只看
+        已到期的）。依 next_date 由近到遠排序。"""
+        rows = self._conn.execute(
+            """SELECT DISTINCT t.task_id, o.next_date FROM tasks t
+               JOIN task_outcomes o ON o.task_id = t.task_id
+               WHERE t.rep_id = ? AND o.next_step IS NOT NULL AND o.next_date IS NOT NULL
+               ORDER BY o.next_date ASC""",
+            (rep_id,),
+        ).fetchall()
+        result = []
+        for r in rows:
+            task = self.get_task(r["task_id"])
+            outcome = self.get_outcome(r["task_id"])
+            if outcome is not None:
+                result.append((task, outcome))
+        return result
+
+    def task_exists(self, task_id: str) -> bool:
+        row = self._conn.execute("SELECT 1 FROM tasks WHERE task_id = ?", (task_id,)).fetchone()
+        return row is not None
+
     def get_task(self, task_id: str) -> Task:
         row = self._conn.execute("SELECT * FROM tasks WHERE task_id = ?", (task_id,)).fetchone()
         if row is None:
@@ -277,3 +300,24 @@ class TaskRepository:
             self._conn.rollback()
             raise
         return len(rows)
+
+    # -- followup task resurfacing ---------------------------------------------
+    def resurface_stale_followup_tasks(self, rep_id: str, as_of: date) -> int:
+        """後續追蹤轉出來的任務用固定 task_id（不含日期，見 services/followup_service.py
+        的 _followup_task_id），只會被建立一次，不像 attack/defend/grow 那樣每天各自
+        生一批新的——這代表如果業務沒有在它被轉出來的當天就審核掉，隔天
+        get_candidate_tasks() 依 task_date 篩選就會看不到它，明明它還是 CANDIDATE
+        狀態、沒被任何人處理掉。跟 resurface_deferred_tasks() 同樣手法：還是
+        CANDIDATE 狀態、task_date 比 as_of 舊，就把 task_date 往前挪到 as_of，
+        讓它持續出現在候選清單，直到業務真的審核過為止（一審核，status 就不再是
+        candidate，這裡的 WHERE 就不會再選到它，不會無限期一直往前挪）。"""
+        cur = self._conn.cursor()
+        cur.execute(
+            """UPDATE tasks SET task_date = ?
+               WHERE rep_id = ? AND model_version = 'followup-v1' AND status = 'candidate'
+                     AND task_date < ?""",
+            (as_of.isoformat(), rep_id, as_of.isoformat()),
+        )
+        updated = cur.rowcount
+        self._conn.commit()
+        return updated
