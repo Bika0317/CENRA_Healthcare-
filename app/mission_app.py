@@ -18,7 +18,7 @@ import streamlit as st
 
 from data.fixture_repository import FixtureRepository
 from data.task_repository import TaskRepository
-from app.pages_mission import itinerary, outcomes, task_detail, today_tasks
+from app.pages_mission import itinerary, manager_overview, outcomes, task_detail, today_tasks
 
 DEMO_DATE = date(2026, 8, 25)
 DB_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "db", "mission.db")
@@ -42,7 +42,7 @@ task_repo = get_task_repo()
 st.title("CENRA Mission｜AI 診所業務任務指揮台")
 st.caption("CRM 記得昨天，CENRA Mission 讓業務決定今天。合成 Demo 資料，未接任何真實系統。")
 
-PAGES = ["今日任務", "任務詳情／審核", "行程", "結果回報"]
+PAGES = ["今日任務", "任務詳情／審核", "行程", "結果回報", "主管總覽"]
 if "mission_nav" not in st.session_state:
     st.session_state["mission_nav"] = PAGES[0]
 if "nav_redirect" in st.session_state:
@@ -56,6 +56,8 @@ elif nav == "任務詳情／審核":
     task_detail.render(task_repo, DEMO_DATE)
 elif nav == "行程":
     itinerary.render(fixture_repo, task_repo, DEMO_DATE)
-else:
+elif nav == "結果回報":
     rep_id = st.session_state.get("selected_rep_id", "L100")
     outcomes.render(task_repo, rep_id, DEMO_DATE)
+else:
+    manager_overview.render(fixture_repo, task_repo, DEMO_DATE)

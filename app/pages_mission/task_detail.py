@@ -12,6 +12,7 @@ from domain.models import (
     ActionMode, EvidenceStrength, InvalidTransitionError, ReviewDecision,
     TaskStatus, ValidationError,
 )
+from app.pages_mission.data_quality import freshness_label, is_stale
 from domain.reason_codes import REVIEW_REASON_CODES
 from services.review_service import submit_review
 
@@ -55,9 +56,11 @@ def render(task_repo, demo_date: date) -> None:
 
     st.caption(
         f"生成時間：{task.generated_at:%Y-%m-%d %H:%M}"
-        f" · 資料更新日期：{task.data_updated_at:%Y-%m-%d}"
+        f" · 資料更新日期：{freshness_label(task.data_updated_at, demo_date)}"
         f" · 任務價值分數用於 Demo 排序"
     )
+    if is_stale(task.data_updated_at, demo_date):
+        st.warning("資料已超過 30 天未更新，建議業務自行核實現況再行動。")
     st.write(f"**為什麼現在**　{task.why_now}")
     st.write(f"**建議目標**　{task.objective}")
     st.write(
@@ -74,7 +77,7 @@ def render(task_repo, demo_date: date) -> None:
 
     st.warning(task.uncertainty_note)
     if task.lat is None or task.lon is None:
-        st.caption("資料缺口：缺少座標資訊，無法排入實訪點位地圖。")
+        st.warning("資料缺口：缺少座標資訊，無法排入實訪點位地圖，只能安排電話或補齊資料後再排實訪。")
 
     if task.status != TaskStatus.CANDIDATE:
         st.info(f"這張任務已經審核過，目前狀態：{STATUS_LABELS[task.status.value]}")

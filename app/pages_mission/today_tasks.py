@@ -7,6 +7,7 @@ import io
 
 import streamlit as st
 
+from app.pages_mission.data_quality import is_stale
 from domain.models import TaskStatus, TaskType
 from services.daily_plan_service import build_daily_plan
 
@@ -38,6 +39,25 @@ def _export_csv(tasks) -> bytes:
         ]
         buf.write(",".join('"' + c.replace('"', '""') + '"' for c in cells) + "\n")
     return buf.getvalue().encode("utf-8-sig")
+
+
+def _export_xlsx(tasks) -> bytes:
+    from openpyxl import Workbook
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "今日任務"
+    ws.append(["task_type", "target_name", "why_now", "objective",
+               "value_score", "action_mode", "estimated_minutes", "status"])
+    for t in tasks:
+        ws.append([
+            TASK_TYPE_LABELS[t.task_type.value], t.target_name, t.why_now, t.objective,
+            round(t.value_score, 1), ACTION_MODE_LABELS[t.action_mode.value],
+            t.estimated_minutes, STATUS_LABELS[t.status.value],
+        ])
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
 
 
 def render(fixture_repo, task_repo, demo_date) -> None:
@@ -155,7 +175,8 @@ def render(fixture_repo, task_repo, demo_date) -> None:
             st.caption(f"為什麼現在：{t.why_now}")
             st.caption(f"建議目標：{t.objective}")
             meta = st.columns(4)
-            meta[0].caption(f"證據強度：{EVIDENCE_LABELS[t.evidence_strength.value]}")
+            stale_suffix = "　⚠️ 資料較舊" if is_stale(t.data_updated_at, demo_date) else ""
+            meta[0].caption(f"證據強度：{EVIDENCE_LABELS[t.evidence_strength.value]}{stale_suffix}")
             meta[1].caption(f"{ACTION_MODE_LABELS[t.action_mode.value]} · {t.estimated_minutes} 分鐘")
             meta[2].caption(f"狀態：{STATUS_LABELS[t.status.value]}")
             if meta[3].button("開啟詳情", key=f"open-{t.task_id}"):
@@ -167,9 +188,15 @@ def render(fixture_repo, task_repo, demo_date) -> None:
                 st.session_state["nav_redirect"] = "任務詳情／審核"
                 st.rerun()
 
-    st.download_button(
+    export_cols = st.columns(2)
+    export_cols[0].download_button(
         "匯出今日任務清單（CSV）",
         _export_csv(tasks), file_name=f"{rep_id}_{demo_date}_today_tasks.csv", mime="text/csv",
+    )
+    export_cols[1].download_button(
+        "匯出今日任務清單（Excel）",
+        _export_xlsx(tasks), file_name=f"{rep_id}_{demo_date}_today_tasks.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
 
     st.divider()
