@@ -29,7 +29,13 @@ from app.pages_mission import itinerary, manager_overview, outcomes, task_detail
 DEMO_DATE = date(2026, 8, 25)
 DB_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "db", "mission.db")
 MANAGER_ACCOUNT = "MANAGER"
-REP_PAGES = ["今日任務", "任務詳情／審核", "行程", "結果回報"]
+# 「任務詳情／審核」故意不放進頂層導覽：這頁的存在前提是「已經選了一張任務」
+# （task_detail.py 沒有 selected_task_id 時只會顯示「請先從今日任務頁選一張」），
+# 跟其他 3 頁「隨時可以直接點進去看」的性質不一樣。之前把它跟其他 3 頁並排
+# 顯示，會讓人以為 4 個是平行、可以任意跳的頁面，但實際上這頁只能靠「今日任務」
+# 頁點任務卡的「開啟詳情」進來——這裡改成用 show_task_detail 這個獨立旗標控制，
+# 不佔頂層導覽的一個選項。
+REP_PAGES = ["今日任務", "行程", "結果回報"]
 
 st.set_page_config(page_title="CENRA Mission", layout="wide")
 
@@ -90,10 +96,12 @@ else:
         st.session_state["mission_nav"] = REP_PAGES[0]
     nav = st.radio("導覽", REP_PAGES, horizontal=True, key="mission_nav", label_visibility="collapsed")
 
-    if nav == "今日任務":
-        today_tasks.render(fixture_repo, task_repo, DEMO_DATE)
-    elif nav == "任務詳情／審核":
+    # 開啟過任務詳情、還沒按「返回」之前，不管上面選了哪個導覽分頁，都先顯示
+    # 任務詳情——這頁是「疊」在導覽之上的，不是導覽本身的一個選項。
+    if st.session_state.get("show_task_detail") and st.session_state.get("selected_task_id"):
         task_detail.render(task_repo, DEMO_DATE)
+    elif nav == "今日任務":
+        today_tasks.render(fixture_repo, task_repo, DEMO_DATE)
     elif nav == "行程":
         itinerary.render(fixture_repo, task_repo, DEMO_DATE)
     else:

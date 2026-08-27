@@ -23,11 +23,13 @@ def _run_app() -> AppTest:
     return at
 
 
-def test_default_account_is_a_rep_with_four_nav_tabs():
+def test_default_account_is_a_rep_with_three_nav_tabs():
     at = _run_app()
     assert not at.exception
     nav = at.radio(key="mission_nav")
-    assert list(nav.options) == ["今日任務", "任務詳情／審核", "行程", "結果回報"]
+    # 「任務詳情／審核」故意不在頂層導覽裡——那頁只能靠今日任務頁點任務卡的
+    # 「開啟詳情」進入，不是一個可以直接點的平行分頁（見 mission_app.py 的說明）。
+    assert list(nav.options) == ["今日任務", "行程", "結果回報"]
 
 
 def test_manager_account_hides_nav_tabs_and_shows_overview():
@@ -50,3 +52,29 @@ def test_switch_to_rep_button_flips_account_and_lands_on_today_tasks():
     assert at.selectbox(key="account_switcher_widget").value == "L101"
     assert at.radio(key="mission_nav").value == "今日任務"
     assert any("林柏宇（L101）" in c.value for c in at.caption)
+
+
+def test_opening_a_task_shows_detail_without_a_matching_nav_tab():
+    """點任務卡的「開啟詳情」後，畫面要換成任務詳情頁，但頂層導覽本身
+    （3 個選項）維持不變——這頁疊在導覽之上，不是導覽的第 4 個分頁。"""
+    at = _run_app()
+    open_buttons = [b for b in at.button if b.key and b.key.startswith("open-")]
+    assert open_buttons
+    open_buttons[0].click().run(timeout=30)
+
+    assert not at.exception
+    assert list(at.radio(key="mission_nav").options) == ["今日任務", "行程", "結果回報"]
+    assert any(h.value.startswith("###") for h in at.markdown)  # task_detail.py 的任務標題
+    back_buttons = [b for b in at.button if b.key == "back_to_today_tasks"]
+    assert back_buttons
+
+
+def test_back_button_returns_to_today_tasks():
+    at = _run_app()
+    open_buttons = [b for b in at.button if b.key and b.key.startswith("open-")]
+    open_buttons[0].click().run(timeout=30)
+
+    at.button(key="back_to_today_tasks").click().run(timeout=30)
+    assert not at.exception
+    # 回到今日任務後，篩選任務類型那個 radio（today_tasks.py 專屬）應該又出現了。
+    assert any(r.label == "篩選任務類型" for r in at.radio)

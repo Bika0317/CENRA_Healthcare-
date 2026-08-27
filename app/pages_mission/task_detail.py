@@ -37,6 +37,14 @@ def _reason_label(code: str) -> str:
 
 
 def render(task_repo, demo_date: date) -> None:
+    # 這頁疊在導覽之上顯示（mission_app.py 靠 show_task_detail 這個旗標判斷），
+    # 所以要有自己的返回按鈕，不能只靠上面的導覽分頁切走——那些分頁選項本來就
+    # 不包含這頁。
+    if st.button("← 返回今日任務", key="back_to_today_tasks"):
+        st.session_state["show_task_detail"] = False
+        st.session_state.pop("selected_task_id", None)
+        st.rerun()
+
     task_id = st.session_state.get("selected_task_id")
     if not task_id:
         st.info("請先從「今日任務」頁面選擇一張任務。")

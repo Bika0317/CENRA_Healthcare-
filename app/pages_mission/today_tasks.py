@@ -191,11 +191,10 @@ def render(fixture_repo, task_repo, demo_date) -> None:
             meta[2].caption(f"狀態：{STATUS_LABELS[t.status.value]}")
             if meta[3].button("開啟詳情", key=f"open-{t.task_id}"):
                 st.session_state["selected_task_id"] = t.task_id
-                # 不能在這裡直接改 st.session_state["mission_nav"]：
-                # 那個 key 綁定的 radio widget已經在 mission_app.py 這一輪跑過了，
-                # Streamlit 不允許 widget 實例化後再改它的 session_state。
-                # 改用一個中繼旗標，讓 mission_app.py 在「建立 radio 之前」讀取並套用。
-                st.session_state["nav_redirect"] = "任務詳情／審核"
+                # 任務詳情不是頂層導覽的一個分頁選項，是「疊」在導覽之上顯示的——
+                # mission_app.py 看到這個旗標就會不管目前導覽選到哪個分頁，直接
+                # 顯示任務詳情頁；不用像 mission_nav 那樣顧慮 widget 已經實例化的問題。
+                st.session_state["show_task_detail"] = True
                 st.rerun()
 
     export_cols = st.columns(2)
