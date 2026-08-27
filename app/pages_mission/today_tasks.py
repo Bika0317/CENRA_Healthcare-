@@ -9,7 +9,9 @@ import streamlit as st
 
 from app.pages_mission.data_quality import is_stale
 from domain.models import TaskStatus, TaskType
+from services.anomaly_service import flag_statistical_outliers
 from services.daily_plan_service import build_daily_plan
+from services.ranking_model_service import score_tasks_with_reference_model
 
 TASK_TYPE_LABELS = {"attack": "攻", "defend": "守", "grow": "增"}
 TASK_TYPE_BADGE_COLOR = {"attack": "blue", "defend": "orange", "grow": "green"}
@@ -157,6 +159,12 @@ def render(fixture_repo, task_repo, demo_date) -> None:
     # 內部彼此的相對順序（分數高低）不會被打亂，只是把⭐建議整組提到最前面。
     filtered = sorted(filtered, key=lambda t: t.task_id not in suggested_ids)
 
+    # 兩個輔助資訊層，都只是「並列參考」，不影響上面已經算好的候選/建議/容量分配：
+    # 模型參考分數樣本不足時 model_scores 是 None，整欄不顯示；離群標記批次太小
+    # 時回傳空集合，同樣不顯示，不會硬湊一個沒有統計意義的結果出來。
+    model_scores_result = score_tasks_with_reference_model(task_repo, tasks)
+    outlier_ids = flag_statistical_outliers(tasks)
+
     for t in filtered:
         with st.container(border=True):
             top = st.columns([1, 5, 2])
@@ -168,6 +176,14 @@ def render(fixture_repo, task_repo, demo_date) -> None:
             top[2].markdown(f"分數 **{t.value_score:.1f}**" + ("　⭐建議" if t.task_id in suggested_ids else ""))
             st.caption(f"為什麼現在：{t.why_now}")
             st.caption(f"建議目標：{t.objective}")
+            if model_scores_result is not None:
+                model_scores, n_samples = model_scores_result
+                st.caption(
+                    f"模型參考分數：{model_scores[t.task_id]:.1f}"
+                    f"（示範性質，訓練樣本 {n_samples} 筆，不宣稱效度）"
+                )
+            if t.task_id in outlier_ids:
+                st.caption("📊 統計離群：訊號組合與同批候選不同，非因果判斷")
             meta = st.columns(4)
             stale_suffix = "　⚠️ 資料較舊" if is_stale(t.data_updated_at, demo_date) else ""
             meta[0].caption(f"證據強度：{EVIDENCE_LABELS[t.evidence_strength.value]}{stale_suffix}")

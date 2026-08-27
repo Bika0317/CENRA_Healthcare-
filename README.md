@@ -104,6 +104,21 @@ API。地圖上的點位順序是簡化的 nearest-neighbor 示意，不是即�
 每一個判斷都能回溯到具體的訂單／互動證據，寫在任務卡的「三項主要證據」與「原因需業務確認」提示裡。
 守任務沒有直接 `competitor_mentioned=true` 的來源事件時，文案只會標示「風險待查」，不會片面認定流失原因。
 
+核心排序邏輯是規則系統之外，另外補了三個刻意設計成「輔助參考、不影響核心決策」的示範層，
+分別對應監督式學習／非監督式學習／生成式 AI 三種技術類別：
+
+- **`services/ranking_model_service.py`**：用 scikit-learn `LogisticRegression`，從業務實際的審核
+  決定（採納/拒絕）學一個排序參考分數，累積不到 20 筆有效樣本時完全不訓練、不顯示，不宣稱效度。
+- **`services/anomaly_service.py`**：用 scikit-learn 的無監督異常偵測模型，在同一批候選任務內做統計
+  離群偵測，只標記「訊號組合跟同批不同」，不推測任何原因（吸取上一版 `app/dashboard.py` 把同類模型
+  拿來暗示「競品入侵」這種因果宣稱的教訓，這次刻意只做統計描述）。
+- **`services/ai_summary_service.py`**：opt-in 的生成式 AI 開場白建議，只把畫面上已經顯示的證據轉成
+  自然語言，不做任何判斷；沒有在 `.streamlit/secrets.toml` 設定 `ANTHROPIC_API_KEY`（見
+  `.streamlit/secrets.toml.example`）時整個功能不顯示，不是任何人的必要依賴。
+
+這三層都只在「今日任務」卡片或「任務詳情」頁上以並列資訊呈現，不會寫回 `value_score`、
+不影響容量分配或建議選取的結果。
+
 ## Legacy 模組說明
 
 `app/dashboard.py` 與 `model/` 是上一版提交（「精準打擊：AI 驅動的智慧巡訪與成交預判」系統，單一

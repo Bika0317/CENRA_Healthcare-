@@ -163,6 +163,26 @@ class TaskRepository:
             raise KeyError(f"task {task_id} not found")
         return _row_to_task(row, self._load_evidences(task_id))
 
+    def get_all_reviewed_tasks_with_decisions(self) -> list[tuple[Task, str]]:
+        """回傳所有「已經被審核過至少一次」的 (原始任務, 最終審核決定) 配對，
+        跨全部業務——給 services/ranking_model_service.py 當訓練資料用。
+        一張任務可能被審核多次（例如先延後、隔天再拒絕），只取最後一次決定，
+        避免同一張任務的分數/特徵被算進訓練集兩次。"""
+        rows = self._conn.execute(
+            """SELECT r.task_id, r.decision FROM task_reviews r
+               INNER JOIN (
+                   SELECT task_id, MAX(created_at) AS latest FROM task_reviews GROUP BY task_id
+               ) latest ON r.task_id = latest.task_id AND r.created_at = latest.latest"""
+        ).fetchall()
+        result = []
+        for r in rows:
+            try:
+                task = self.get_task(r["task_id"])
+            except KeyError:
+                continue
+            result.append((task, r["decision"]))
+        return result
+
     def get_review_history(self, task_id: str) -> list[TaskReview]:
         rows = self._conn.execute(
             "SELECT * FROM task_reviews WHERE task_id = ? ORDER BY created_at", (task_id,)

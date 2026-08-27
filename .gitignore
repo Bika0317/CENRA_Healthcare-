@@ -4,3 +4,4 @@ __pycache__/
 outbox/
 data/review_log.csv
 .DS_Store
+.streamlit/secrets.toml

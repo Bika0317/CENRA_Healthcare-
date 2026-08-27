@@ -14,6 +14,7 @@ from domain.models import (
 )
 from app.pages_mission.data_quality import freshness_label, is_stale
 from domain.reason_codes import REVIEW_REASON_CODES
+from services import ai_summary_service
 from services.review_service import submit_review
 
 TASK_TYPE_LABELS = {"attack": "攻", "defend": "守", "grow": "增"}
@@ -78,6 +79,18 @@ def render(task_repo, demo_date: date) -> None:
     st.warning(task.uncertainty_note)
     if task.lat is None or task.lon is None:
         st.warning("資料缺口：缺少座標資訊，無法排入實訪點位地圖，只能安排電話或補齊資料後再排實訪。")
+
+    # opt-in、需要自備 Anthropic API 金鑰的示範功能：沒設定金鑰時 is_available()
+    # 回傳 False，這裡直接不顯示任何按鈕，不是顯示一個永遠會失敗的功能。
+    if ai_summary_service.is_available():
+        st.markdown("#### AI 開場白建議（選用功能）")
+        st.caption("只把上面已經顯示的資訊轉成一段自然語言，不會新增任何未顯示的原因或判斷。")
+        summary_key = f"ai_summary_{task_id}"
+        if st.button("產生開場白建議", key=f"ai-summary-btn-{task_id}"):
+            with st.spinner("產生中..."):
+                st.session_state[summary_key] = ai_summary_service.generate_opening_line(task)
+        if summary_key in st.session_state:
+            st.info(st.session_state[summary_key])
 
     if task.status != TaskStatus.CANDIDATE:
         st.info(f"這張任務已經審核過，目前狀態：{STATUS_LABELS[task.status.value]}")
